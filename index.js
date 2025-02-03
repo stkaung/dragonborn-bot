@@ -299,6 +299,8 @@ async function getUserLogs(username) {
           action_type: "Suspension",
           action_id: suspensionData.action_id,
           issued_date: suspensionData.issued_date,
+          duration: suspensionData.duration,
+          end_date: suspensionData.end_date,
         });
       }
     });
@@ -345,10 +347,10 @@ async function createEmbedForLog(log, type) {
   const robloxData = await getRobloxData(log.roblox_id, type);
 
   if (type === "user") {
-    if (log.action_id === "ban") {
+    if (log.action_type === "Ban") {
       embed = new EmbedBuilder()
         .setColor(0xff0000) // Red color
-        .setTitle(`${log.action_type} Information`)
+        .setTitle("Ban Information")
         .setThumbnail(robloxData.thumbnail) // Set user thumbnail
         .addFields(
           { name: "Action ID", value: log.action_id, inline: true },
@@ -365,17 +367,23 @@ async function createEmbedForLog(log, type) {
           }
         )
         .setFooter({
-          text: `${log.action_type} details provided by Dragonborn Moderation`,
+          text: `Ban details provided by Dragonborn Moderation`,
         });
     } else {
       embed = new EmbedBuilder()
         .setColor(0xff0000) // Red color
-        .setTitle(`${log.action_type} Information`)
+        .setTitle("Suspension Information")
         .setThumbnail(robloxData.thumbnail) // Set user thumbnail
         .addFields(
           { name: "Action ID", value: log.action_id, inline: true },
           { name: "Roblox Username", value: robloxData.username, inline: true },
           { name: "Roblox ID", value: log.roblox_id, inline: true },
+          { name: "Duration", value: `${log.duration} days`, inline: true },
+          {
+            name: "End Date",
+            value: log.end_date.toDate().toLocaleString(),
+            inline: true,
+          },
           { name: "Category", value: log.category, inline: true },
           { name: "Reason", value: log.reason, inline: false },
           { name: "Evidence", value: log.link || "N/A", inline: false },
@@ -387,7 +395,7 @@ async function createEmbedForLog(log, type) {
           }
         )
         .setFooter({
-          text: `${log.action_type} details provided by Dragonborn Moderation`,
+          text: `Suspension details provided by Dragonborn Moderation`,
         });
     }
   } else if (type === "group") {
