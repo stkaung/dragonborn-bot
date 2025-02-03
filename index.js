@@ -547,7 +547,7 @@ async function createEmbedForLog(log, type) {
           }
         )
         .setFooter({
-          text: `Brought to you by Dragoborn Moderation`,
+          text: `Brought to you by DB | Justice Panel`,
         });
     } else {
       embed = new EmbedBuilder()
@@ -575,7 +575,7 @@ async function createEmbedForLog(log, type) {
           }
         )
         .setFooter({
-          text: "Brought to you by Dragonborn Moderation",
+          text: "Brought to you by DB | Justice Panel",
         });
     }
   } else if (type === "group") {
@@ -607,7 +607,7 @@ async function createEmbedForLog(log, type) {
         }
       )
       .setFooter({
-        text: "Brought to you by Dragonborn Moderation",
+        text: "Brought to you by DB | Justice Panel",
       });
   }
 
@@ -1403,13 +1403,12 @@ client.on("interactionCreate", async (interaction) => {
             value: blacklistedGroupNames.join("\n"),
           },
           {
-            name: "Total Dragonborn Members Checked",
-            value: dragonbornMembers.length.toString(),
-            inline: true,
+            name: `Members in Blacklisted Groups (${membersInBlacklistedGroups} members)`,
+            value: commonMembers.join(", "),
           },
           {
-            name: "Total Members in Blacklisted Groups",
-            value: membersInBlacklistedGroups.toString(),
+            name: "Total Dragonborn Members",
+            value: dragonbornMembers.length.toString(),
             inline: true,
           },
           {
