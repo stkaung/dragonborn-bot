@@ -9,9 +9,10 @@ import {
 } from "discord.js";
 import noblox from "noblox.js";
 import admin from "firebase-admin";
-import { Timestamp } from "firebase-admin/firestore";
 import dotenv from "dotenv";
 import fs from "fs";
+
+const dragonbornGroupId = 4760223;
 
 dotenv.config();
 
@@ -192,6 +193,70 @@ const commands = [
         required: true,
       },
     ],
+  },
+  {
+    name: "blacklist",
+    description: "Blacklist a group from the community.",
+    options: [
+      {
+        name: "group_id",
+        description: "The Roblox group ID to blacklist.",
+        type: 4, // INTEGER type for group ID
+        required: true,
+      },
+      {
+        name: "category",
+        description:
+          "The category for the blacklist (e.g., 'Degenerate', 'Exploiter').",
+        type: 3, // STRING type for category
+        required: true,
+        choices: [
+          { name: "Degenerate", value: "degenerate" },
+          { name: "Exploiter", value: "exploiter" },
+        ],
+      },
+      {
+        name: "reason",
+        description: "The reason for blacklisting the group.",
+        type: 3, // STRING type for reason
+        required: true,
+      },
+      {
+        name: "deep_blacklist",
+        description: "Whether to apply a deep blacklist (true/false).",
+        type: 5, // BOOLEAN type for deep_blacklist
+        required: true,
+      },
+      {
+        name: "additional_info",
+        description: "Provide additional information for the blacklist.",
+        type: 3, // STRING type for additional_info
+        required: false,
+      },
+      {
+        name: "evidence",
+        description: "Provide evidence (optional).",
+        type: 3, // STRING type for evidence
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "unblacklist",
+    description: "Remove a group from the blacklist.",
+    options: [
+      {
+        name: "group_id",
+        description: "The Roblox group ID to unblacklist.",
+        type: 4, // INTEGER type for group ID
+        required: true,
+      },
+    ],
+  },
+  {
+    name: "blacklist-overview",
+    description: "Get an overview of Dragonborn members in blacklisted groups.",
+    options: [],
   },
 ];
 
@@ -1071,13 +1136,311 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
   }
+
+  // /blacklist Command
+  if (interaction.commandName === "blacklist") {
+    const options = interaction.options.data.reduce((acc, option) => {
+      acc[option.name] = option.value;
+      return acc;
+    }, {});
+
+    const {
+      group_id,
+      category,
+      reason,
+      deep_blacklist,
+      additional_info,
+      evidence,
+    } = options;
+
+    const modRoleId = "1335829172131594251";
+    const execRoleId = "1335829226003366009";
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+
+    if (
+      !member.roles.cache.has(modRoleId) &&
+      !member.roles.cache.has(execRoleId)
+    ) {
+      return interaction.reply({
+        content: "❌ You do not have permission to use this command.",
+        ephemeral: true,
+      });
+    }
+
+    const issuedBy = member.roles.cache.has(modRoleId)
+      ? "Moderation Department"
+      : "Executive Department";
+
+    try {
+      await interaction.deferReply();
+
+      // Check if the group exists on Roblox using the group_id
+      const groupInfo = await noblox.getGroup(group_id).catch(() => null);
+      if (!groupInfo) {
+        return interaction.followUp(
+          "❌ The provided group ID does not exist on Roblox."
+        );
+      }
+
+      const existingBlacklist = await db
+        .collection("blacklists")
+        .where("roblox_id", "==", group_id)
+        .get();
+      if (!existingBlacklist.empty) {
+        return interaction.followUp("❌ This group is already blacklisted.");
+      }
+
+      const actionId = `blacklist-${Date.now()}`;
+
+      const blacklistData = {
+        action_id: actionId,
+        roblox_id: group_id,
+        category,
+        reason,
+        deep_blacklist,
+        additional_info:
+          additional_info || "No additional information provided",
+        evidence: evidence || "No evidence provided",
+        issued_by: issuedBy,
+        issued_date: new Date(),
+      };
+
+      await db.collection("blacklists").doc(actionId).set(blacklistData);
+
+      const successEmbed = new EmbedBuilder()
+        .setTitle("Group Blacklisted")
+        .setColor(0xff0000)
+        .addFields(
+          { name: "Action ID", value: actionId, inline: true },
+          { name: "Group Name", value: groupInfo.name, inline: true },
+          { name: "Group ID", value: group_id.toString(), inline: true },
+          { name: "Category", value: category, inline: true },
+          { name: "Reason", value: reason, inline: true },
+          {
+            name: "Deep Blacklist",
+            value: deep_blacklist.toString(),
+            inline: true,
+          },
+          {
+            name: "Additional Info",
+            value: additional_info || "No additional information",
+            inline: true,
+          },
+          {
+            name: "Evidence",
+            value: evidence || "No evidence provided",
+            inline: true,
+          },
+          { name: "Issued By", value: issuedBy, inline: true },
+          {
+            name: "Issued Date",
+            value: new Date().toLocaleString(),
+            inline: true,
+          }
+        )
+        .setTimestamp()
+        .setFooter({
+          text: `Blacklisted by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
+        });
+
+      await interaction.followUp({ embeds: [successEmbed] });
+    } catch (error) {
+      console.error("Error processing blacklist command:", error);
+      await interaction.followUp(
+        "❌ There was an error processing the blacklist."
+      );
+    }
+  }
+
+  // /unblacklist Command
+  if (interaction.commandName === "unblacklist") {
+    const group_id = interaction.options.getInteger("group_id");
+
+    const modRoleId = "1335829172131594251";
+    const execRoleId = "1335829226003366009";
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+
+    if (
+      !member.roles.cache.has(modRoleId) &&
+      !member.roles.cache.has(execRoleId)
+    ) {
+      return interaction.reply({
+        content: "❌ You do not have permission to run this command.",
+        ephemeral: true,
+      });
+    }
+
+    const groupInfo = await noblox.getGroup(group_id).catch(() => null);
+    if (!groupInfo) {
+      return interaction.followUp(
+        "❌ The provided group ID does not exist on Roblox."
+      );
+    }
+
+    try {
+      await interaction.deferReply();
+
+      const existingBlacklist = await db
+        .collection("blacklists")
+        .where("roblox_id", "==", group_id)
+        .get();
+      if (existingBlacklist.empty) {
+        return interaction.followUp(
+          "❌ This group is not currently blacklisted."
+        );
+      }
+
+      const batch = db.batch();
+      existingBlacklist.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+
+      const successEmbed = new EmbedBuilder()
+        .setTitle("✅ Group Unblacklisted")
+        .setColor(0x00ff00)
+        .setDescription(
+          `${groupInfo.name} has been successfully unblacklisted.`
+        )
+        .setFooter({
+          text: `Unblacklisted by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
+        });
+
+      await interaction.followUp({ embeds: [successEmbed] });
+    } catch (error) {
+      console.error("Error in /unblacklist command:", error);
+      await interaction.reply({
+        content:
+          "❌ An error occurred while processing the unblacklist command. Please try again later.",
+        ephemeral: true,
+      });
+    }
+  }
+  if (interaction.commandName === "blacklist-overview") {
+    const dragonbornGroupId = 4760223;
+    const modRoleId = "1335829172131594251";
+    const execRoleId = "1335829226003366009";
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+
+    if (
+      !member.roles.cache.has(modRoleId) &&
+      !member.roles.cache.has(execRoleId)
+    ) {
+      return interaction.reply({
+        content: "❌ You do not have permission to use this command.",
+        ephemeral: true,
+      });
+    }
+
+    try {
+      await interaction.deferReply();
+
+      // Fetch members of the Dragonborn PMC group (4760223)
+      const dragonbornMembers = [];
+      const dragonbornRoles = await noblox.getRoles(dragonbornGroupId);
+      for (const role of dragonbornRoles) {
+        const members = await noblox.getPlayers(dragonbornGroupId, role.id);
+        for (const member of members) {
+          dragonbornMembers.push(member.username);
+        }
+      }
+
+      // Fetch all blacklisted groups from Firestore
+      const blacklistedGroupsSnapshot = await db.collection("blacklists").get();
+      const blacklistedGroups = blacklistedGroupsSnapshot.docs.map((doc) =>
+        doc.data()
+      );
+      console.log(blacklistedGroups);
+
+      // Initialize counters
+      let totalMembersChecked = 0;
+      let membersInBlacklistedGroups = 0;
+
+      const blacklistedGroupNames = [];
+      const blacklistedGroupMembers = [];
+      // Loop through each blacklisted group and check for members in Dragonborn PMC
+      for (const blacklistedGroup of blacklistedGroups) {
+        const groupId = blacklistedGroup.roblox_id;
+        const groupName = await noblox
+          .getGroup(groupId)
+          .then((group) => group.name);
+        blacklistedGroupNames.push(groupName);
+
+        // Fetch members of the blacklisted group
+        const blacklistedGroupRoles = await noblox.getRoles(groupId);
+        for (const role of blacklistedGroupRoles) {
+          const members = await noblox.getPlayers(groupId, role.id);
+          for (const member of members) {
+            blacklistedGroupMembers.push(member.username);
+          }
+        }
+      }
+
+      // Check how many Dragonborn members are in this blacklisted group
+      const commonMembers = dragonbornMembers.filter((username) =>
+        blacklistedGroupMembers.includes(username)
+      );
+
+      // Update counters
+      totalMembersChecked += dragonbornMembers.length;
+      membersInBlacklistedGroups += commonMembers.length;
+
+      // Calculate the percentage of Dragonborn members in blacklisted groups
+      const percentageInBlacklistedGroups =
+        totalMembersChecked > 0
+          ? ((membersInBlacklistedGroups / totalMembersChecked) * 100).toFixed(
+              2
+            )
+          : 0;
+
+      // Create the embed message
+      const overviewEmbed = new EmbedBuilder()
+        .setTitle("Blacklist Overview")
+        .setColor(0x00ff00)
+        .addFields(
+          {
+            name: "Blacklisted Groups",
+            value: blacklistedGroupNames.join("\n"),
+          },
+          {
+            name: "Total Dragonborn Members Checked",
+            value: dragonbornMembers.length.toString(),
+            inline: true,
+          },
+          {
+            name: "Total Members in Blacklisted Groups",
+            value: membersInBlacklistedGroups.toString(),
+            inline: true,
+          },
+          {
+            name: "Percentage of Members in Blacklisted Groups",
+            value: `${percentageInBlacklistedGroups}%`,
+            inline: true,
+          }
+        )
+        .setFooter({
+          text: `Overview generated by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
+        })
+        .setTimestamp();
+
+      await interaction.followUp({ embeds: [overviewEmbed] });
+    } catch (error) {
+      console.error("Error in /blacklist-overview command:", error);
+      await interaction.followUp({
+        content:
+          "❌ An error occurred while processing the blacklist overview. Please try again later.",
+        ephemeral: true,
+      });
+    }
+  }
 });
 
 client
   .login(process.env.DISCORD_TOKEN)
   .then(() => {
     console.log("Bot successfully logged into Discord!");
-    startNoblox(); // Ensure noblox.js login happens after bot login
+    startNoblox();
     fetchAnnouncementChannel();
   })
   .catch((error) => {
