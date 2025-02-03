@@ -9,6 +9,7 @@ import {
 } from "discord.js";
 import noblox from "noblox.js";
 import admin from "firebase-admin";
+import { Timestamp } from "firebase-admin/firestore";
 import dotenv from "dotenv";
 import fs from "fs";
 
@@ -64,7 +65,7 @@ const commands = [
   },
   {
     name: "set-channel",
-    description: "Set an announcement ",
+    description: "Set channels.",
     options: [
       {
         name: "type",
@@ -89,6 +90,58 @@ const commands = [
       {
         name: "action_id",
         description: "The Action ID to announce.",
+        type: 3, // STRING type
+        required: true,
+      },
+    ],
+  },
+  {
+    name: "suspend",
+    description: "Suspend a user from the group.",
+    options: [
+      {
+        name: "username",
+        description: "Roblox username to suspend.",
+        type: 3, // STRING type
+        required: true,
+      },
+      {
+        name: "duration",
+        description: "Duration of the suspension in days.",
+        type: 4, // INTEGER type
+        required: true,
+      },
+      {
+        name: "category",
+        description: "Reason category for the suspension.",
+        type: 3, // STRING type
+        required: true,
+        choices: [
+          { name: "Degenerate", value: "degenerate" },
+          { name: "Exploiter", value: "exploiter" },
+        ],
+      },
+      {
+        name: "reason",
+        description: "Provide a reason for the suspension.",
+        type: 3, // STRING type
+        required: true,
+      },
+      {
+        name: "evidence",
+        description: "Provide evidence (optional).",
+        type: 3, // STRING type
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "unsuspend",
+    description: "Unsuspend a user from the Roblox platform.",
+    options: [
+      {
+        name: "username",
+        description: "The Roblox username of the user to unsuspend.",
         type: 3, // STRING type
         required: true,
       },
@@ -206,7 +259,11 @@ async function announceAction(interaction) {
                 .toDate()
                 .toLocaleString()}** by the **${data.issued_by}**.`
             )
-            .addFields({ name: "Action ID", value: action_id });
+            .addFields({ name: "Action ID", value: action_id })
+            .setFooter({
+              text: `Announced by ${interaction.user.username}`,
+              iconURL: interaction.user.avatarURL(),
+            });
         } else if (collection === "suspensions") {
           embed = new EmbedBuilder()
             .setColor(0xffa500)
@@ -222,7 +279,11 @@ async function announceAction(interaction) {
                 data.issued_by
               }**.`
             )
-            .addFields({ name: "Action ID", value: action_id });
+            .addFields({ name: "Action ID", value: action_id })
+            .setFooter({
+              text: `Announced by ${interaction.user.username}`,
+              iconURL: interaction.user.avatarURL(),
+            });
         } else if (collection === "blacklists") {
           embed = new EmbedBuilder()
             .setColor(0x000000)
@@ -238,7 +299,11 @@ async function announceAction(interaction) {
                 data.issued_by
               }**.`
             )
-            .addFields({ name: "Action ID", value: action_id });
+            .addFields({ name: "Action ID", value: action_id })
+            .setFooter({
+              text: `Announced by ${interaction.user.username}`,
+              iconURL: interaction.user.avatarURL(),
+            });
         }
 
         // Send the embed to the announcement channel
@@ -367,7 +432,8 @@ async function createEmbedForLog(log, type) {
           }
         )
         .setFooter({
-          text: `Ban details provided by Dragonborn Moderation`,
+          text: `Logs requested by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
         });
     } else {
       embed = new EmbedBuilder()
@@ -377,7 +443,7 @@ async function createEmbedForLog(log, type) {
         .addFields(
           { name: "Action ID", value: log.action_id, inline: true },
           { name: "Roblox Username", value: robloxData.username, inline: true },
-          { name: "Roblox ID", value: log.roblox_id, inline: true },
+          { name: "Roblox ID", value: String(log.roblox_id), inline: true },
           { name: "Duration", value: `${log.duration} days`, inline: true },
           {
             name: "End Date",
@@ -395,7 +461,8 @@ async function createEmbedForLog(log, type) {
           }
         )
         .setFooter({
-          text: `Suspension details provided by Dragonborn Moderation`,
+          text: `Logs requested by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
         });
     }
   } else if (type === "group") {
@@ -427,7 +494,8 @@ async function createEmbedForLog(log, type) {
         }
       )
       .setFooter({
-        text: "Blacklist details provided by Dragonborn Moderation",
+        text: `Logs requested by ${interaction.user.username}`,
+        iconURL: interaction.user.avatarURL(),
       });
   }
 
@@ -582,6 +650,219 @@ client.on("interactionCreate", async (interaction) => {
 
   if (interaction.commandName === "announce") {
     await announceAction(interaction);
+  }
+
+  if (!interaction.isCommand()) return;
+
+  if (interaction.commandName === "suspend") {
+    const options = interaction.options.data.reduce((acc, option) => {
+      acc[option.name] = option.value;
+      return acc;
+    }, {});
+
+    const { username, duration, category, reason, evidence } = options;
+
+    // Check for required roles
+    const modRoleId = "1335829172131594251";
+    const execRoleId = "1335829226003366009";
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+
+    if (
+      !member.roles.cache.has(modRoleId) &&
+      !member.roles.cache.has(execRoleId)
+    ) {
+      return interaction.reply({
+        content: "❌ You do not have permission to use this command.",
+        ephemeral: true,
+      });
+    }
+
+    // Determine issued_by based on role
+    const issuedBy = member.roles.cache.has(modRoleId)
+      ? "Moderation Department"
+      : "Executive Department";
+
+    try {
+      await interaction.deferReply();
+
+      // Validate the user exists & get their Roblox ID
+      const robloxId = await noblox
+        .getIdFromUsername(username)
+        .catch(() => null);
+      if (!robloxId) {
+        return interaction.followUp(
+          "❌ The provided username does not exist on Roblox."
+        );
+      }
+
+      // Check if the user is already suspended
+      const activeSuspensions = await db
+        .collection("suspensions")
+        .where("roblox_id", "==", robloxId)
+        .get();
+      const isCurrentlySuspended = activeSuspensions.docs.some(
+        (doc) => doc.data().end_date.toDate() > new Date()
+      );
+
+      if (isCurrentlySuspended) {
+        return interaction.followUp("❌ This user is already suspended.");
+      }
+
+      // Get the user's Roblox avatar
+      const thumbnails = await noblox.getPlayerThumbnail(
+        [robloxId],
+        420,
+        "png",
+        true
+      );
+      const avatarUrl =
+        thumbnails[0]?.imageUrl || "https://tr.rbxcdn.com/default-avatar.png";
+
+      // Generate a new unique action_id safely
+      const suspensionsSnapshot = await db
+        .collection("suspensions")
+        .orderBy("action_id", "desc")
+        .limit(1)
+        .get();
+      let newActionId = "suspension-1";
+      if (!suspensionsSnapshot.empty) {
+        const lastActionId = suspensionsSnapshot.docs[0].data().action_id;
+        const lastNumber = parseInt(lastActionId.split("-")[1], 10);
+        newActionId = `suspension-${lastNumber + 1}`;
+      }
+
+      // Calculate timestamps
+      const issuedDate = new Date();
+      const endDate = new Date(issuedDate);
+      endDate.setDate(issuedDate.getDate() + duration);
+
+      // Create Firestore document
+      const suspensionData = {
+        action_id: newActionId,
+        roblox_id: robloxId,
+        duration,
+        category,
+        reason,
+        issued_by: issuedBy,
+        issued_date: issuedDate,
+        end_date: endDate,
+        link: evidence || "No evidence provided",
+      };
+
+      await db.collection("suspensions").doc(newActionId).set(suspensionData);
+
+      // Success embed with user avatar
+      const successEmbed = new EmbedBuilder()
+        .setTitle("Suspension Issued")
+        .setColor(0x00ff00)
+        .setThumbnail(avatarUrl) // Add the user's avatar
+        .addFields(
+          { name: "Action ID", value: newActionId, inline: true },
+          { name: "Roblox Username", value: username, inline: true },
+          { name: "Roblox ID", value: robloxId.toString(), inline: true },
+          { name: "Duration", value: `${duration} days`, inline: true },
+          { name: "End Date", value: endDate.toLocaleString(), inline: true },
+          { name: "Category", value: category, inline: true },
+          { name: "Reason", value: reason, inline: false },
+          {
+            name: "Evidence",
+            value: evidence || "No evidence provided",
+            inline: false,
+          },
+          { name: "Issued By", value: issuedBy, inline: true },
+          {
+            name: "Issued Date",
+            value: issuedDate.toLocaleString(),
+            inline: true,
+          }
+        )
+        .setTimestamp()
+        .setFooter({
+          text: `Suspension issued by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
+        });
+
+      await interaction.followUp({ embeds: [successEmbed] });
+    } catch (error) {
+      console.error("Error processing suspend command:", error);
+      await interaction.followUp(
+        "❌ There was an error processing the suspension."
+      );
+    }
+  }
+
+  if (interaction.commandName === "unsuspend") {
+    const username = interaction.options.getString("username");
+
+    try {
+      // Check if the user has permission
+      const member = interaction.guild.members.cache.get(interaction.user.id);
+      const hasPermission =
+        member.roles.cache.has("1335829172131594251") ||
+        member.roles.cache.has("1335829226003366009");
+
+      if (!hasPermission) {
+        await interaction.reply({
+          content: "❌ You do not have permission to run that command!",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // Get Roblox ID from the username
+      const userId = await noblox.getIdFromUsername(username);
+      if (!userId) {
+        await interaction.reply({
+          content: `❌ The Roblox username ${username} does not exist.`,
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // Check if user is suspended in Firestore
+      const suspensionsRef = db.collection("suspensions");
+      const querySnapshot = await suspensionsRef
+        .where("roblox_id", "==", userId)
+        .where("end_date", ">", new Date())
+        .get();
+
+      if (querySnapshot.empty) {
+        await interaction.reply({
+          content: "❌ The user is not currently suspended.",
+          ephemeral: true,
+        });
+        return;
+      }
+
+      // Remove suspension from Firestore
+      const suspendedDoc = querySnapshot.docs[0];
+      await suspendedDoc.ref.delete();
+
+      // Send success message
+      const userPFP = `https://www.roblox.com/headshot-thumbnail/image?userId=${userId}&width=420&height=420&format=png`;
+      const successEmbed = new EmbedBuilder()
+        .setTitle("✅ User Unsuspended")
+        .setColor(0x00ff00)
+        .setDescription(
+          `User **${username}** has been successfully unsuspended.`
+        )
+        .setThumbnail(userPFP)
+        .setFooter({
+          text: `Unsuspended by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
+        });
+
+      await interaction.reply({ embeds: [successEmbed] });
+    } catch (error) {
+      console.error("Error in /unsuspend command:", error);
+
+      const errorEmbed = new EmbedBuilder();
+      await interaction.reply({
+        content:
+          "❌ An error occurred while processing the unsuspend command. Please try again later.",
+        ephemeral: true,
+      });
+    }
   }
 });
 
