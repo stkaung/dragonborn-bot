@@ -137,11 +137,57 @@ const commands = [
   },
   {
     name: "unsuspend",
-    description: "Unsuspend a user from the Roblox platform.",
+    description: "Unsuspend a user from the Roblox group.",
     options: [
       {
         name: "username",
         description: "The Roblox username of the user to unsuspend.",
+        type: 3, // STRING type
+        required: true,
+      },
+    ],
+  },
+  {
+    name: "ban",
+    description: "Permanently bans a user from the group.",
+    options: [
+      {
+        name: "username",
+        description: "Roblox username to ban.",
+        type: 3, // STRING type
+        required: true,
+      },
+      {
+        name: "category",
+        description: "Reason category for the ban.",
+        type: 3, // STRING type
+        required: true,
+        choices: [
+          { name: "Degenerate", value: "degenerate" },
+          { name: "Exploiter", value: "exploiter" },
+        ],
+      },
+      {
+        name: "reason",
+        description: "Provide a reason for the ban.",
+        type: 3, // STRING type
+        required: true,
+      },
+      {
+        name: "evidence",
+        description: "Provide evidence (optional).",
+        type: 3, // STRING type
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "unban",
+    description: "Unbans a user from the Roblox group.",
+    options: [
+      {
+        name: "username",
+        description: "The Roblox username of the user to unbanned.",
         type: 3, // STRING type
         required: true,
       },
@@ -419,8 +465,12 @@ async function createEmbedForLog(log, type) {
         .setThumbnail(robloxData.thumbnail) // Set user thumbnail
         .addFields(
           { name: "Action ID", value: log.action_id, inline: true },
-          { name: "Roblox Username", value: robloxData.username, inline: true },
-          { name: "Roblox ID", value: log.roblox_id, inline: true },
+          {
+            name: "Roblox Username",
+            value: robloxData.username,
+            inline: true,
+          },
+          { name: "Roblox ID", value: String(log.roblox_id), inline: true },
           { name: "Category", value: log.category, inline: true },
           { name: "Reason", value: log.reason, inline: false },
           { name: "Evidence", value: log.link || "N/A", inline: false },
@@ -432,8 +482,7 @@ async function createEmbedForLog(log, type) {
           }
         )
         .setFooter({
-          text: `Logs requested by ${interaction.user.username}`,
-          iconURL: interaction.user.avatarURL(),
+          text: `Brought to you by Dragoborn Moderation`,
         });
     } else {
       embed = new EmbedBuilder()
@@ -461,8 +510,7 @@ async function createEmbedForLog(log, type) {
           }
         )
         .setFooter({
-          text: `Logs requested by ${interaction.user.username}`,
-          iconURL: interaction.user.avatarURL(),
+          text: "Brought to you by Dragonborn Moderation",
         });
     }
   } else if (type === "group") {
@@ -472,7 +520,7 @@ async function createEmbedForLog(log, type) {
       .addFields(
         { name: "Action ID", value: log.action_id, inline: true },
         { name: "Group Name", value: robloxData.groupName, inline: true },
-        { name: "Group ID", value: log.roblox_id, inline: true },
+        { name: "Group ID", value: String(log.roblox_id), inline: true },
         { name: "Category", value: log.category, inline: true },
         { name: "Reason", value: log.reason, inline: false },
         { name: "Evidence", value: log.link || "N/A", inline: false },
@@ -494,8 +542,7 @@ async function createEmbedForLog(log, type) {
         }
       )
       .setFooter({
-        text: `Logs requested by ${interaction.user.username}`,
-        iconURL: interaction.user.avatarURL(),
+        text: "Brought to you by Dragonborn Moderation",
       });
   }
 
@@ -677,6 +724,13 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
 
+    if (duration <= 0) {
+      return interaction.reply({
+        content: "❌ Duration must be at least 1 day.",
+        ephemeral: true,
+      });
+    }
+
     // Determine issued_by based on role
     const issuedBy = member.roles.cache.has(modRoleId)
       ? "Moderation Department"
@@ -719,17 +773,7 @@ client.on("interactionCreate", async (interaction) => {
         thumbnails[0]?.imageUrl || "https://tr.rbxcdn.com/default-avatar.png";
 
       // Generate a new unique action_id safely
-      const suspensionsSnapshot = await db
-        .collection("suspensions")
-        .orderBy("action_id", "desc")
-        .limit(1)
-        .get();
-      let newActionId = "suspension-1";
-      if (!suspensionsSnapshot.empty) {
-        const lastActionId = suspensionsSnapshot.docs[0].data().action_id;
-        const lastNumber = parseInt(lastActionId.split("-")[1], 10);
-        newActionId = `suspension-${lastNumber + 1}`;
-      }
+      const newActionId = `suspension-${Date.now()}`;
 
       // Calculate timestamps
       const issuedDate = new Date();
@@ -754,7 +798,7 @@ client.on("interactionCreate", async (interaction) => {
       // Success embed with user avatar
       const successEmbed = new EmbedBuilder()
         .setTitle("Suspension Issued")
-        .setColor(0x00ff00)
+        .setColor(0xff0000)
         .setThumbnail(avatarUrl) // Add the user's avatar
         .addFields(
           { name: "Action ID", value: newActionId, inline: true },
@@ -860,6 +904,169 @@ client.on("interactionCreate", async (interaction) => {
       await interaction.reply({
         content:
           "❌ An error occurred while processing the unsuspend command. Please try again later.",
+        ephemeral: true,
+      });
+    }
+  }
+
+  if (interaction.commandName === "ban") {
+    const options = interaction.options.data.reduce((acc, option) => {
+      acc[option.name] = option.value;
+      return acc;
+    }, {});
+
+    const { username, category, reason, evidence } = options;
+    const modRoleId = "1335829172131594251";
+    const execRoleId = "1335829226003366009";
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+
+    if (
+      !member.roles.cache.has(modRoleId) &&
+      !member.roles.cache.has(execRoleId)
+    ) {
+      return interaction.reply({
+        content: "❌ You do not have permission to use this command.",
+        ephemeral: true,
+      });
+    }
+
+    const issuedBy = member.roles.cache.has(modRoleId)
+      ? "Moderation Department"
+      : "Executive Department";
+
+    try {
+      await interaction.deferReply();
+      const robloxId = await noblox
+        .getIdFromUsername(username)
+        .catch(() => null);
+      if (!robloxId) {
+        return interaction.followUp(
+          "❌ The provided username does not exist on Roblox."
+        );
+      }
+
+      const activeBans = await db
+        .collection("bans")
+        .where("roblox_id", "==", robloxId)
+        .get();
+      if (!activeBans.empty) {
+        return interaction.followUp("❌ This user is already banned.");
+      }
+
+      const thumbnails = await noblox.getPlayerThumbnail(
+        [robloxId],
+        420,
+        "png",
+        true
+      );
+      const avatarUrl =
+        thumbnails[0]?.imageUrl || "https://tr.rbxcdn.com/default-avatar.png";
+      const actionId = `ban-${Date.now()}`;
+
+      const banData = {
+        action_id: actionId,
+        roblox_id: robloxId,
+        category,
+        reason,
+        issued_by: issuedBy,
+        issued_date: new Date(),
+        link: evidence || "No evidence provided",
+      };
+
+      await db.collection("bans").doc(actionId).set(banData);
+
+      const successEmbed = new EmbedBuilder()
+        .setTitle("User Banned")
+        .setColor(0xff0000)
+        .setThumbnail(avatarUrl)
+        .addFields(
+          { name: "Action ID", value: actionId, inline: true },
+          { name: "Roblox Username", value: username, inline: true },
+          { name: "Roblox ID", value: robloxId.toString(), inline: true },
+          { name: "Category", value: category, inline: true },
+          { name: "Reason", value: reason, inline: false },
+          {
+            name: "Evidence",
+            value: evidence || "No evidence provided",
+            inline: false,
+          },
+          { name: "Issued By", value: issuedBy, inline: true },
+          {
+            name: "Issued Date",
+            value: new Date().toLocaleString(),
+            inline: true,
+          }
+        )
+        .setTimestamp()
+        .setFooter({
+          text: `Banned by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
+        });
+
+      await interaction.followUp({ embeds: [successEmbed] });
+    } catch (error) {
+      console.error("Error processing ban command:", error);
+      await interaction.followUp("❌ There was an error processing the ban.");
+    }
+  }
+
+  if (interaction.commandName === "unban") {
+    const username = interaction.options.getString("username");
+
+    try {
+      const member = await interaction.guild.members.fetch(interaction.user.id);
+      const hasPermission =
+        member.roles.cache.has("1335829172131594251") ||
+        member.roles.cache.has("1335829226003366009");
+
+      if (!hasPermission) {
+        return interaction.reply({
+          content: "❌ You do not have permission to run this command!",
+          ephemeral: true,
+        });
+      }
+
+      const userId = await noblox.getIdFromUsername(username);
+      if (!userId) {
+        return interaction.reply({
+          content: `❌ The Roblox username ${username} does not exist.`,
+          ephemeral: true,
+        });
+      }
+
+      const bansRef = db.collection("bans");
+      const querySnapshot = await bansRef
+        .where("roblox_id", "==", userId)
+        .get();
+
+      if (querySnapshot.empty) {
+        return interaction.reply({
+          content: "❌ The user is not currently banned.",
+          ephemeral: true,
+        });
+      }
+
+      const batch = db.batch();
+      querySnapshot.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+
+      const userPFP = `https://www.roblox.com/headshot-thumbnail/image?userId=${userId}&width=420&height=420&format=png`;
+      const successEmbed = new EmbedBuilder()
+        .setTitle("✅ User Unbanned")
+        .setColor(0x00ff00)
+        .setDescription(`User **${username}** has been successfully unbanned.`)
+        .setThumbnail(userPFP)
+        .setFooter({
+          text: `Unbanned by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
+        });
+
+      await interaction.reply({ embeds: [successEmbed] });
+    } catch (error) {
+      console.error("Error in /unban command:", error);
+      await interaction.reply({
+        content:
+          "❌ An error occurred while processing the unban command. Please try again later.",
         ephemeral: true,
       });
     }
