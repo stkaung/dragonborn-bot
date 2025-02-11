@@ -592,7 +592,9 @@ async function createEmbedForLog(log, type) {
           { name: "Roblox ID", value: String(log.roblox_id), inline: true },
           {
             name: "Tier",
-            value: `Tier ${log.tier} (${log.duration_months} months)`,
+            value: `Tier ${log.tier} (${log.duration_months} ${
+              log.duration_months === 1 ? "month" : "months"
+            })`,
             inline: true,
           },
           {
@@ -931,7 +933,9 @@ client.on("interactionCreate", async (interaction) => {
           { name: "Roblox ID", value: robloxId.toString(), inline: true },
           {
             name: "Tier",
-            value: `Tier ${tier} (${durationInMonths} months)`,
+            value: `Tier ${tier} (${durationInMonths} ${
+              durationInMonths === 1 ? "month" : "months"
+            })`,
             inline: true,
           },
           { name: "End Date", value: endDate.toLocaleString(), inline: true },
