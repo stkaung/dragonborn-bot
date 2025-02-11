@@ -11,6 +11,8 @@ import noblox from "noblox.js";
 import admin from "firebase-admin";
 import dotenv from "dotenv";
 import fs from "fs";
+import axios from "axios";
+import * as cheerio from "cheerio";
 
 const dragonbornGroupId = 4760223;
 
@@ -107,15 +109,23 @@ const commands = [
         required: true,
       },
       {
-        name: "duration",
-        description: "Duration of the suspension in days.",
+        name: "tier",
+        description:
+          "Suspension tier (1: 1mo, 2: 3mo, 3: 6mo, 4: 9mo, 5: 12mo)",
         type: 4, // INTEGER type
         required: true,
+        choices: [
+          { name: "Tier 1 - 1 Month", value: 1 },
+          { name: "Tier 2 - 3 Months", value: 2 },
+          { name: "Tier 3 - 6 Months", value: 3 },
+          { name: "Tier 4 - 9 Months", value: 4 },
+          { name: "Tier 5 - 12 Months", value: 5 },
+        ],
       },
       {
         name: "category",
         description: "Reason category for the suspension.",
-        type: 3, // STRING type
+        type: 3,
         required: true,
         choices: [
           { name: "Degenerate", value: "degenerate" },
@@ -125,13 +135,13 @@ const commands = [
       {
         name: "reason",
         description: "Provide a reason for the suspension.",
-        type: 3, // STRING type
+        type: 3,
         required: true,
       },
       {
         name: "evidence",
         description: "Provide evidence (optional).",
-        type: 3, // STRING type
+        type: 3,
         required: false,
       },
     ],
@@ -284,6 +294,28 @@ async function startNoblox() {
   }
 }
 
+async function fetchGroupIconUrl(groupId) {
+  const url = `https://thumbnails.roblox.com/v1/groups/icons?groupIds=${groupId}&size=420x420&format=Png&isCircular=false`;
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if (
+      data &&
+      data.data &&
+      data.data.length > 0 &&
+      data.data[0].state === "Completed"
+    ) {
+      return data.data[0].imageUrl;
+    } else {
+      throw new Error("Group icon not found or still processing.");
+    }
+  } catch (error) {
+    console.error("Error fetching group icon:", error);
+    return null;
+  }
+}
 let announcementChannelId;
 
 async function fetchAnnouncementChannel() {
@@ -558,7 +590,11 @@ async function createEmbedForLog(log, type) {
           { name: "Action ID", value: log.action_id, inline: true },
           { name: "Roblox Username", value: robloxData.username, inline: true },
           { name: "Roblox ID", value: String(log.roblox_id), inline: true },
-          { name: "Duration", value: `${log.duration} days`, inline: true },
+          {
+            name: "Tier",
+            value: `Tier ${log.tier} (${log.duration_months} months)`,
+            inline: true,
+          },
           {
             name: "End Date",
             value: log.end_date.toDate().toLocaleString(),
@@ -579,9 +615,14 @@ async function createEmbedForLog(log, type) {
         });
     }
   } else if (type === "group") {
+    const groupIcon = await fetchGroupIconUrl(
+      log.roblox_id,
+      robloxData.groupName
+    );
     embed = new EmbedBuilder()
       .setColor(0xff0000) // Red color
       .setTitle("Blacklist Information")
+      .setThumbnail(groupIcon)
       .addFields(
         { name: "Action ID", value: log.action_id, inline: true },
         { name: "Group Name", value: robloxData.groupName, inline: true },
@@ -772,7 +813,7 @@ client.on("interactionCreate", async (interaction) => {
       return acc;
     }, {});
 
-    const { username, duration, category, reason, evidence } = options;
+    const { username, tier, category, reason, evidence } = options;
 
     // Check for required roles
     const modRoleId = "1335829172131594251";
@@ -789,14 +830,24 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
 
-    if (duration <= 0) {
+    // Convert tier to months
+    const tierToMonths = {
+      1: 1, // Tier 1: 1 month
+      2: 3, // Tier 2: 3 months
+      3: 6, // Tier 3: 6 months
+      4: 9, // Tier 4: 9 months
+      5: 12, // Tier 5: 12 months
+    };
+
+    const durationInMonths = tierToMonths[tier];
+
+    if (!durationInMonths) {
       return interaction.reply({
-        content: "❌ Duration must be at least 1 day.",
+        content: "❌ Invalid tier. Please select a tier between 1 and 5.",
         ephemeral: true,
       });
     }
 
-    // Determine issued_by based on role
     const issuedBy = member.roles.cache.has(modRoleId)
       ? "Moderation Department"
       : "Executive Department";
@@ -804,7 +855,6 @@ client.on("interactionCreate", async (interaction) => {
     try {
       await interaction.deferReply();
 
-      // Validate the user exists & get their Roblox ID
       const robloxId = await noblox
         .getIdFromUsername(username)
         .catch(() => null);
@@ -814,7 +864,6 @@ client.on("interactionCreate", async (interaction) => {
         );
       }
 
-      // Check if the user is already suspended
       const activeSuspensions = await db
         .collection("suspensions")
         .where("roblox_id", "==", robloxId)
@@ -827,7 +876,6 @@ client.on("interactionCreate", async (interaction) => {
         return interaction.followUp("❌ This user is already suspended.");
       }
 
-      // Get the user's Roblox avatar
       const thumbnails = await noblox.getPlayerThumbnail(
         [robloxId],
         420,
@@ -837,19 +885,32 @@ client.on("interactionCreate", async (interaction) => {
       const avatarUrl =
         thumbnails[0]?.imageUrl || "https://tr.rbxcdn.com/default-avatar.png";
 
-      // Generate a new unique action_id safely
-      const newActionId = `suspension-${Date.now()}`;
+      const newActionId = await db.runTransaction(async (transaction) => {
+        const suspensionsSnapshot = await transaction.get(
+          db.collection("suspensions")
+        );
+        let maxNumber = 0;
 
-      // Calculate timestamps
+        suspensionsSnapshot.forEach((doc) => {
+          const match = doc.id.match(/^suspension-(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNumber) maxNumber = num;
+          }
+        });
+
+        return `suspension-${maxNumber + 1}`;
+      });
+
       const issuedDate = new Date();
       const endDate = new Date(issuedDate);
-      endDate.setDate(issuedDate.getDate() + duration);
+      endDate.setMonth(endDate.getMonth() + durationInMonths);
 
-      // Create Firestore document
       const suspensionData = {
         action_id: newActionId,
         roblox_id: robloxId,
-        duration,
+        tier: tier,
+        duration_months: durationInMonths,
         category,
         reason,
         issued_by: issuedBy,
@@ -860,16 +921,19 @@ client.on("interactionCreate", async (interaction) => {
 
       await db.collection("suspensions").doc(newActionId).set(suspensionData);
 
-      // Success embed with user avatar
       const successEmbed = new EmbedBuilder()
         .setTitle("Suspension Issued")
         .setColor(0xff0000)
-        .setThumbnail(avatarUrl) // Add the user's avatar
+        .setThumbnail(avatarUrl)
         .addFields(
           { name: "Action ID", value: newActionId, inline: true },
           { name: "Roblox Username", value: username, inline: true },
           { name: "Roblox ID", value: robloxId.toString(), inline: true },
-          { name: "Duration", value: `${duration} days`, inline: true },
+          {
+            name: "Tier",
+            value: `Tier ${tier} (${durationInMonths} months)`,
+            inline: true,
+          },
           { name: "End Date", value: endDate.toLocaleString(), inline: true },
           { name: "Category", value: category, inline: true },
           { name: "Reason", value: reason, inline: false },
@@ -1026,7 +1090,22 @@ client.on("interactionCreate", async (interaction) => {
       );
       const avatarUrl =
         thumbnails[0]?.imageUrl || "https://tr.rbxcdn.com/default-avatar.png";
-      const actionId = `ban-${Date.now()}`;
+      const actionId = await db.runTransaction(async (transaction) => {
+        const bansSnapshot = await transaction.get(db.collection("bans"));
+        let maxNumber = 0;
+
+        bansSnapshot.forEach((doc) => {
+          const match = doc.id.match(/^ban-(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNumber) {
+              maxNumber = num;
+            }
+          }
+        });
+
+        return `ban-${maxNumber + 1}`;
+      });
 
       const banData = {
         action_id: actionId,
@@ -1115,12 +1194,10 @@ client.on("interactionCreate", async (interaction) => {
       querySnapshot.forEach((doc) => batch.delete(doc.ref));
       await batch.commit();
 
-      const userPFP = `https://www.roblox.com/headshot-thumbnail/image?userId=${userId}&width=420&height=420&format=png`;
       const successEmbed = new EmbedBuilder()
         .setTitle("✅ User Unbanned")
         .setColor(0x00ff00)
         .setDescription(`User **${username}** has been successfully unbanned.`)
-        .setThumbnail(userPFP)
         .setFooter({
           text: `Unbanned by ${interaction.user.username}`,
           iconURL: interaction.user.avatarURL(),
@@ -1190,7 +1267,26 @@ client.on("interactionCreate", async (interaction) => {
         return interaction.followUp("❌ This group is already blacklisted.");
       }
 
-      const actionId = `blacklist-${Date.now()}`;
+      const actionId = await db.runTransaction(async (transaction) => {
+        const blacklistSnapshot = await transaction.get(
+          db.collection("blacklists")
+        );
+        let maxNumber = 0;
+
+        blacklistSnapshot.forEach((doc) => {
+          const match = doc.id.match(/^blacklist-(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNumber) {
+              maxNumber = num;
+            }
+          }
+        });
+
+        return `blacklist-${maxNumber + 1}`;
+      });
+
+      const icon = await fetchGroupIconUrl(group_id, groupInfo.name);
 
       const blacklistData = {
         action_id: actionId,
@@ -1209,6 +1305,7 @@ client.on("interactionCreate", async (interaction) => {
 
       const successEmbed = new EmbedBuilder()
         .setTitle("Group Blacklisted")
+        .setThumbnail(icon)
         .setColor(0xff0000)
         .addFields(
           { name: "Action ID", value: actionId, inline: true },
@@ -1317,7 +1414,6 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
   if (interaction.commandName === "blacklist-overview") {
-    const dragonbornGroupId = 4760223;
     const modRoleId = "1335829172131594251";
     const execRoleId = "1335829226003366009";
     const member = await interaction.guild.members.fetch(interaction.user.id);
@@ -1350,11 +1446,6 @@ client.on("interactionCreate", async (interaction) => {
       const blacklistedGroups = blacklistedGroupsSnapshot.docs.map((doc) =>
         doc.data()
       );
-      console.log(blacklistedGroups);
-
-      // Initialize counters
-      let totalMembersChecked = 0;
-      let membersInBlacklistedGroups = 0;
 
       const blacklistedGroupNames = [];
       const blacklistedGroupMembers = [];
@@ -1376,16 +1467,19 @@ client.on("interactionCreate", async (interaction) => {
         }
       }
 
-      // Check how many Dragonborn members are in this blacklisted group
+      // Sort groups and members alphabetically
+      blacklistedGroupNames.sort();
+      dragonbornMembers.sort();
+      blacklistedGroupMembers.sort();
+
+      // Check how many Dragonborn members are in these blacklisted groups
       const commonMembers = dragonbornMembers.filter((username) =>
         blacklistedGroupMembers.includes(username)
       );
 
-      // Update counters
-      totalMembersChecked += dragonbornMembers.length;
-      membersInBlacklistedGroups += commonMembers.length;
-
       // Calculate the percentage of Dragonborn members in blacklisted groups
+      const totalMembersChecked = dragonbornMembers.length;
+      const membersInBlacklistedGroups = commonMembers.length;
       const percentageInBlacklistedGroups =
         totalMembersChecked > 0
           ? ((membersInBlacklistedGroups / totalMembersChecked) * 100).toFixed(
@@ -1393,37 +1487,90 @@ client.on("interactionCreate", async (interaction) => {
             )
           : 0;
 
-      // Create the embed message
-      const overviewEmbed = new EmbedBuilder()
-        .setTitle("Blacklist Overview")
-        .setColor(0x00ff00)
-        .addFields(
-          {
-            name: "Blacklisted Groups",
-            value: blacklistedGroupNames.join("\n"),
-          },
-          {
-            name: `Members in Blacklisted Groups (${membersInBlacklistedGroups} members)`,
-            value: commonMembers.join(", "),
-          },
-          {
-            name: "Total Dragonborn Members",
-            value: dragonbornMembers.length.toString(),
-            inline: true,
-          },
-          {
-            name: "Percentage of Members in Blacklisted Groups",
-            value: `${percentageInBlacklistedGroups}%`,
-            inline: true,
-          }
-        )
-        .setFooter({
-          text: `Overview generated by ${interaction.user.username}`,
-          iconURL: interaction.user.avatarURL(),
-        })
-        .setTimestamp();
+      // Helper function to create embed chunks
+      const createEmbed = (title, fields) => {
+        return new EmbedBuilder()
+          .setTitle(title)
+          .setColor(0x00ff00)
+          .addFields(...fields)
+          .setFooter({
+            text: `Overview generated by ${interaction.user.username}`,
+            iconURL: interaction.user.avatarURL(),
+          })
+          .setTimestamp();
+      };
 
-      await interaction.followUp({ embeds: [overviewEmbed] });
+      // Function to split the data into chunks that fit Discord's character limits
+      const chunkData = (data, chunkSize, withComma) => {
+        const chunks = [];
+        let currentChunk = "";
+        data.forEach((item, index) => {
+          const separator =
+            withComma && index !== data.length - 1 ? ", " : "\n"; // Comma for members, new line for groups
+          if ((currentChunk + item + separator).length <= chunkSize) {
+            currentChunk += item + separator;
+          } else {
+            chunks.push(currentChunk.trim());
+            currentChunk = item + separator;
+          }
+        });
+        if (currentChunk) chunks.push(currentChunk.trim());
+        return chunks;
+      };
+
+      // Chunking both the blacklisted group names and the common members
+      const blacklistedGroupChunks = chunkData(
+        blacklistedGroupNames,
+        1024,
+        false
+      ); // Blacklisted groups use new line
+      const commonMemberChunks = chunkData(commonMembers, 1024, true); // Common members use comma
+
+      // Send embeds for blacklisted groups
+      for (let i = 0; i < blacklistedGroupChunks.length; i++) {
+        const overviewEmbed = createEmbed(
+          `Blacklist Overview (Groups - Part ${i + 1})`,
+          [
+            {
+              name: "Blacklisted Groups",
+              value: blacklistedGroupChunks[i] || "No Blacklisted Groups",
+            },
+          ]
+        );
+
+        await interaction.followUp({ embeds: [overviewEmbed] });
+      }
+
+      // Send embeds for common members
+      for (let i = 0; i < commonMemberChunks.length; i++) {
+        const overviewEmbed = createEmbed(
+          `Blacklist Overview (Members - Part ${i + 1})`,
+          [
+            {
+              name: `Members in Blacklisted Groups (${membersInBlacklistedGroups} members)`,
+              value: commonMemberChunks[i] || "No Members",
+            },
+          ]
+        );
+
+        await interaction.followUp({ embeds: [overviewEmbed] });
+      }
+
+      // Send a separate message for the total members and percentage
+      const percentageEmbed = createEmbed("Blacklist Overview (Summary)", [
+        {
+          name: "Total Dragonborn Members",
+          value: totalMembersChecked.toString(),
+          inline: true,
+        },
+        {
+          name: "Percentage of Members in Blacklisted Groups",
+          value: `${percentageInBlacklistedGroups}%`,
+          inline: true,
+        },
+      ]);
+
+      await interaction.followUp({ embeds: [percentageEmbed] });
     } catch (error) {
       console.error("Error in /blacklist-overview command:", error);
       await interaction.followUp({
