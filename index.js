@@ -44,12 +44,13 @@ const commands = [
     options: [
       {
         name: "type",
-        description: "Specify user or group.",
+        description: "Specify user, group, or appeal.",
         type: 3, // STRING type
         required: true,
         choices: [
           { name: "user", value: "user" },
           { name: "group", value: "group" },
+          { name: "appeal", value: "appeal" },
         ],
       },
       {
@@ -72,14 +73,18 @@ const commands = [
     options: [
       {
         name: "type",
-        description: "Specify type of channel (announcements).",
+        description: "Specify type of channel (announcements/appeals/reports).",
         type: 3, // STRING
         required: true,
-        choices: [{ name: "announcements", value: "announcements" }],
+        choices: [
+          { name: "announcements", value: "announcements" },
+          { name: "appeals", value: "appeals" },
+          { name: "reports", value: "reports" }, // Add reports channel option
+        ],
       },
       {
         name: "channel",
-        description: "Select the announcement channel.",
+        description: "Select the channel.",
         type: 7, // CHANNEL
         required: true,
       },
@@ -87,16 +92,8 @@ const commands = [
   },
   {
     name: "announce",
-    description:
-      "Announce an action from the Firestore database by its Action ID.",
-    options: [
-      {
-        name: "action_id",
-        description: "The Action ID to announce.",
-        type: 3, // STRING type
-        required: true,
-      },
-    ],
+    description: "Announces all moderation actions from the past week",
+    options: [], // Remove options since we'll fetch automatically
   },
   {
     name: "suspend",
@@ -268,6 +265,197 @@ const commands = [
     description: "Get an overview of Dragonborn members in blacklisted groups.",
     options: [],
   },
+  {
+    name: "appeal",
+    description: "Submit an appeal for a moderation action",
+    options: [
+      {
+        name: "type",
+        description: "Type of appeal (user/group)",
+        type: 3,
+        required: true,
+        choices: [
+          { name: "User", value: "user" },
+          { name: "Group", value: "group" },
+        ],
+      },
+      {
+        name: "reason",
+        description: "Reason for your appeal",
+        type: 3,
+        required: true,
+      },
+      {
+        name: "evidence",
+        description: "Evidence to support your appeal",
+        type: 3,
+        required: true,
+      },
+      {
+        name: "username",
+        description: "Your Roblox username",
+        type: 3,
+        required: false,
+      },
+      {
+        name: "group_id",
+        description: "Your group ID",
+        type: 3,
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "accept_appeal",
+    description: "Accept a pending appeal",
+    default_member_permissions: "0", // No default permissions
+    options: [
+      {
+        name: "type",
+        description: "Type of appeal (user/group)",
+        type: 3,
+        required: true,
+        choices: [
+          { name: "User", value: "user" },
+          { name: "Group", value: "group" },
+        ],
+      },
+      {
+        name: "username",
+        description: "Roblox username (for user appeals)",
+        type: 3,
+        required: false,
+      },
+      {
+        name: "group_id",
+        description: "Group ID (for group appeals)",
+        type: 3,
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "reject_appeal",
+    description: "Reject a pending appeal",
+    default_member_permissions: "0", // No default permissions
+    options: [
+      {
+        name: "type",
+        description: "Type of appeal (user/group)",
+        type: 3,
+        required: true,
+        choices: [
+          { name: "User", value: "user" },
+          { name: "Group", value: "group" },
+        ],
+      },
+      {
+        name: "reason",
+        description: "Reason for rejecting the appeal",
+        type: 3,
+        required: true,
+      },
+      {
+        name: "username",
+        description: "Roblox username (for user appeals)",
+        type: 3,
+        required: false,
+      },
+      {
+        name: "group_id",
+        description: "Group ID (for group appeals)",
+        type: 3,
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "report",
+    description: "Submit a report against a user or group",
+    options: [
+      {
+        name: "type",
+        description: "Type of report (user/group)",
+        type: 3,
+        required: true,
+        choices: [
+          { name: "User", value: "user" },
+          { name: "Group", value: "group" },
+        ],
+      },
+      {
+        name: "reason",
+        description: "Reason for the report",
+        type: 3,
+        required: true,
+      },
+      {
+        name: "evidence",
+        description: "Evidence link(s)",
+        type: 3,
+        required: true,
+      },
+      {
+        name: "username",
+        description: "Roblox username of the user (for user reports)",
+        type: 3,
+        required: false,
+      },
+      {
+        name: "group_id",
+        description: "Roblox group ID (for group reports)",
+        type: 3,
+        required: false,
+      },
+    ],
+  },
+  {
+    name: "accept_report",
+    description: "Accept and action a pending report",
+    options: [
+      {
+        name: "report_id",
+        description: "The ID of the report to accept (e.g. report-1)",
+        type: 3,
+        required: true,
+      },
+      {
+        name: "action",
+        description: "Action to take",
+        type: 3,
+        required: true,
+        choices: [
+          { name: "Ban", value: "ban" },
+          { name: "Suspend", value: "suspend" },
+          { name: "Blacklist", value: "blacklist" },
+        ],
+      },
+      {
+        name: "reason",
+        description: "Reason for taking action",
+        type: 3,
+        required: true,
+      },
+    ],
+  },
+  {
+    name: "reject_report",
+    description: "Reject a pending report",
+    options: [
+      {
+        name: "report_id",
+        description: "The ID of the report to reject (e.g. report-1)",
+        type: 3,
+        required: true,
+      },
+      {
+        name: "reason",
+        description: "Reason for rejecting the report",
+        type: 3,
+        required: true,
+      },
+    ],
+  },
 ];
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
@@ -317,6 +505,36 @@ async function fetchGroupIconUrl(groupId) {
   }
 }
 let announcementChannelId;
+let appealChannelId;
+let reportsChannelId; // Add this line
+
+async function fetchChannels() {
+  try {
+    const [announcementDoc, appealDoc, reportsDoc] = await Promise.all([
+      db.collection("channels").doc("announcement_channel").get(),
+      db.collection("channels").doc("appeal_channel").get(),
+      db.collection("channels").doc("reports_channel").get(), // Add this line
+    ]);
+
+    if (announcementDoc.exists) {
+      announcementChannelId = announcementDoc.data().id;
+      console.log(`✅ Announcement channel set to: ${announcementChannelId}`);
+    }
+
+    if (appealDoc.exists) {
+      appealChannelId = appealDoc.data().id;
+      console.log(`✅ Appeal channel set to: ${appealChannelId}`);
+    }
+
+    if (reportsDoc.exists) {
+      // Add this block
+      reportsChannelId = reportsDoc.data().id;
+      console.log(`✅ Reports channel set to: ${reportsChannelId}`);
+    }
+  } catch (error) {
+    console.error("❌ Error fetching channels from Firestore:", error);
+  }
+}
 
 async function fetchAnnouncementChannel() {
   try {
@@ -338,138 +556,258 @@ async function fetchAnnouncementChannel() {
   }
 }
 
-async function announceAction(interaction) {
-  const action_id = interaction.options.getString("action_id");
+async function announceWeekly(interaction) {
+  // Check for required roles
+  const modRoleId = "1335829172131594251";
+  const execRoleId = "1335829226003366009";
+  const member = await interaction.guild.members.fetch(interaction.user.id);
 
-  // Ensure the announcement channel is set
-  if (!announcementChannelId) {
+  if (
+    !member.roles.cache.has(modRoleId) &&
+    !member.roles.cache.has(execRoleId)
+  ) {
     return interaction.reply({
-      content:
-        "⚠️ The announcement channel is not set. Please set it using /set-channel.",
+      content: "❌ You do not have permission to use this command.",
       ephemeral: true,
     });
   }
 
   try {
-    // Extract action type from action_id
-    const actionType = action_id.split("-")[0];
-    const validActionTypes = ["ban", "suspension", "blacklist"];
+    await interaction.deferReply();
 
-    // Check if the actionType is valid
-    if (!validActionTypes.includes(actionType)) {
-      return interaction.reply({
-        content: `❌ Invalid Action ID format. Action type should be one of: ${validActionTypes.join(
-          ", "
-        )}`,
-        ephemeral: true,
+    // Calculate date range
+    const today = new Date();
+    const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    // Fetch all actions from the past week
+    const [
+      bansSnapshot,
+      suspensionsSnapshot,
+      blacklistsSnapshot,
+      appealsSnapshot,
+      reportsSnapshot,
+    ] = await Promise.all([
+      db
+        .collection("bans")
+        .where("issued_date", ">=", lastWeek)
+        .where("issued_date", "<=", today)
+        .get(),
+      db
+        .collection("suspensions")
+        .where("issued_date", ">=", lastWeek)
+        .where("issued_date", "<=", today)
+        .get(),
+      db
+        .collection("blacklists")
+        .where("issued_date", ">=", lastWeek)
+        .where("issued_date", "<=", today)
+        .get(),
+      db
+        .collection("appeals")
+        .where("issued_date", ">=", lastWeek)
+        .where("issued_date", "<=", today)
+        .get(),
+      db
+        .collection("reports")
+        .where("issued_date", ">=", lastWeek)
+        .where("issued_date", "<=", today)
+        .get(),
+    ]);
+
+    // Calculate number of verdict types with logs
+    const verdictCount = [
+      !bansSnapshot.empty,
+      !suspensionsSnapshot.empty,
+      !blacklistsSnapshot.empty,
+    ].filter(Boolean).length;
+
+    const embed = new EmbedBuilder()
+      .setTitle(`Weekly Moderation Report`)
+      .setDescription(
+        `**__Week of ${
+          today.getMonth() + 1
+        }/${today.getDate()} - ${verdictCount}/3 Verdicts__**`
+      )
+      .setColor(0x0099ff)
+      .setTimestamp()
+      .setFooter({
+        text: "DB | Justice Panel",
+        iconURL: client.user.avatarURL(),
       });
-    }
 
-    // Set collection based on action type
-    const collection = actionType + "s";
-
-    // Query the corresponding collection
-    const snapshot = await db
-      .collection(collection)
-      .where("action_id", "==", action_id)
-      .get();
-
-    if (!snapshot.empty) {
-      // Action found, process the result
-      for (const doc of snapshot.docs) {
-        const data = doc.data();
-
-        // Fetch Roblox username or group name
-        let robloxData;
-        if (collection === "blacklists") {
-          robloxData = await noblox.getGroup(data.roblox_id);
-        } else {
-          robloxData = await noblox.getUsernameFromId(data.roblox_id);
-        }
-
-        // Create an embed based on the collection type
-        let embed;
-        if (collection === "bans") {
-          embed = new EmbedBuilder()
-            .setColor(0xff0000)
-            .setTitle("Ban Announcement")
-            .setDescription(
-              `User **${robloxData}** has been banned as ${
-                data.category === "degenerate" ? "a" : "an"
-              } **${data.category}** for "**${
-                data.reason
-              }**" on **${data.issued_date
-                .toDate()
-                .toLocaleString()}** by the **${data.issued_by}**.`
-            )
-            .addFields({ name: "Action ID", value: action_id })
-            .setFooter({
-              text: `Announced by ${interaction.user.username}`,
-              iconURL: interaction.user.avatarURL(),
-            });
-        } else if (collection === "suspensions") {
-          embed = new EmbedBuilder()
-            .setColor(0xffa500)
-            .setTitle("Suspension Announcement")
-            .setDescription(
-              `User **${robloxData}** has been suspended for **${
-                data.duration
-              } days** on **${data.issued_date
-                .toDate()
-                .toLocaleString()}** as ${
-                data.category === "degenerate" ? "a" : "an"
-              } **${data.category}** for "**${data.reason}**" by the **${
-                data.issued_by
-              }**.`
-            )
-            .addFields({ name: "Action ID", value: action_id })
-            .setFooter({
-              text: `Announced by ${interaction.user.username}`,
-              iconURL: interaction.user.avatarURL(),
-            });
-        } else if (collection === "blacklists") {
-          embed = new EmbedBuilder()
-            .setColor(0x000000)
-            .setTitle("Blacklist Announcement")
-            .setDescription(
-              `The group **${
-                robloxData.name
-              }** has been blacklisted on **${data.issued_date
-                .toDate()
-                .toLocaleString()}** as ${
-                data.category === "degenerate" ? "a" : "an"
-              } **${data.category}** for "**${data.reason}**" by the **${
-                data.issued_by
-              }**.`
-            )
-            .addFields({ name: "Action ID", value: action_id })
-            .setFooter({
-              text: `Announced by ${interaction.user.username}`,
-              iconURL: interaction.user.avatarURL(),
-            });
-        }
-
-        // Send the embed to the announcement channel
-        const channel = await client.channels.fetch(announcementChannelId);
-        await channel.send({ embeds: [embed] });
+    // Bans section
+    if (!bansSnapshot.empty) {
+      let bansText = "";
+      for (const doc of bansSnapshot.docs) {
+        const ban = doc.data();
+        const username = await noblox.getUsernameFromId(ban.roblox_id);
+        const line =
+          `**User:** [${username}](https://roblox.com/users/${ban.roblox_id})\n` +
+          `**Category:** ${ban.category || "N/A"}\n` +
+          `**Reason:** ${ban.reason}\n` +
+          (ban.link && ban.link !== "No evidence provided"
+            ? `**Evidence:** [Click Here](${ban.link})\n`
+            : "") +
+          `**Date:** ${ban.issued_date.toDate().toLocaleString()}\n` +
+          `\u200B`;
+        bansText += line;
       }
+      embed.addFields({ name: "🔨 Bans", value: bansText });
+    }
+
+    // Suspensions section
+    if (!suspensionsSnapshot.empty) {
+      let suspensionsText = "";
+      for (const doc of suspensionsSnapshot.docs) {
+        const suspension = doc.data();
+        const username = await noblox.getUsernameFromId(suspension.roblox_id);
+
+        // Format duration to include months
+        let duration = suspension.duration;
+
+        if (duration === 1) {
+          duration = "1 month";
+        } else {
+          duration = `${duration} months`;
+        }
+
+        const line =
+          `**User:** [${username}](https://roblox.com/users/${suspension.roblox_id})\n` +
+          `**Category:** ${suspension.category || "N/A"}\n` +
+          `**Tier:** ${suspension.tier}\n` +
+          `**Reason:** ${suspension.reason}\n` +
+          `**Duration:** ${duration}\n` +
+          `**End Date:** ${suspension.end_date.toDate().toLocaleString()}\n` +
+          (suspension.link && suspension.link !== "No evidence provided"
+            ? `**Evidence:** [Click Here](${suspension.link})\n`
+            : "") +
+          `**Date:** ${suspension.issued_date.toDate().toLocaleString()}\n` +
+          `\u200B`;
+        suspensionsText += line;
+      }
+      embed.addFields({ name: "⚠️ Suspensions", value: suspensionsText });
+    }
+
+    // Blacklists section
+    if (!blacklistsSnapshot.empty) {
+      let blacklistsText = "";
+      for (const doc of blacklistsSnapshot.docs) {
+        const blacklist = doc.data();
+        const groupInfo = await noblox.getGroup(blacklist.roblox_id);
+        const line =
+          `**Group:** [${groupInfo.name}](https://roblox.com/groups/${blacklist.roblox_id})\n` +
+          `**Category:** ${blacklist.category || "N/A"}\n` +
+          `**Reason:** ${blacklist.reason}\n` +
+          (blacklist.evidence && blacklist.evidence !== "No evidence provided"
+            ? `**Evidence:** [Click Here](${blacklist.evidence})\n`
+            : "") +
+          `**Date:** ${blacklist.issued_date.toDate().toLocaleString()}\n` +
+          `\u200B`;
+        blacklistsText += line;
+      }
+      embed.addFields({ name: "🚫 Blacklists", value: blacklistsText });
+    }
+
+    // Appeals section
+    if (!appealsSnapshot.empty) {
+      let appealsText = "";
+      for (const doc of appealsSnapshot.docs) {
+        const appeal = doc.data();
+        let name;
+        if (appeal.type === "user") {
+          name = await noblox.getUsernameFromId(appeal.roblox_id);
+        } else {
+          const groupInfo = await noblox.getGroup(appeal.roblox_id);
+          name = groupInfo.name;
+        }
+
+        const line =
+          `**${
+            appeal.type === "user" ? "User" : "Group"
+          }:** [${name}](https://roblox.com/${
+            appeal.type === "user" ? "users" : "groups"
+          }/${appeal.roblox_id})\n` +
+          `**Reason:** ${appeal.reason}\n` +
+          (appeal.evidence && appeal.evidence !== "No evidence provided"
+            ? `**Evidence:** [Click Here](${appeal.evidence})\n`
+            : "") +
+          `**Status:** ${
+            appeal.status.charAt(0).toUpperCase() + appeal.status.slice(1)
+          }` +
+          (appeal.status === "rejected" && appeal.rejection_reason
+            ? `\n**Rejection Reason:** ${appeal.rejection_reason}`
+            : "") +
+          `\n**Date:** ${appeal.issued_date.toDate().toLocaleString()}\n` +
+          `\u200B`;
+        appealsText += line;
+      }
+      embed.addFields({ name: "📝 Appeals", value: appealsText });
+    }
+
+    // Reports section
+    if (!reportsSnapshot.empty) {
+      let reportsText = "";
+      for (const doc of reportsSnapshot.docs) {
+        const report = doc.data();
+        let name;
+        if (report.type === "user") {
+          name = await noblox.getUsernameFromId(report.roblox_id);
+        } else {
+          const groupInfo = await noblox.getGroup(report.roblox_id);
+          name = groupInfo.name;
+        }
+
+        const line =
+          `**${
+            report.type === "user" ? "User" : "Group"
+          }:** [${name}](https://roblox.com/${
+            report.type === "user" ? "users" : "groups"
+          }/${report.roblox_id})\n` +
+          `**Reason:** ${report.reason}\n` +
+          (report.evidence && report.evidence !== "No evidence provided"
+            ? `**Evidence:** [Click Here](${report.evidence})\n`
+            : "") +
+          `**Status:** ${
+            report.status.charAt(0).toUpperCase() + report.status.slice(1)
+          }` +
+          (report.status === "accepted"
+            ? `\n**Action Taken:** ${report.action_taken}\n**Action Reason:** ${report.action_reason}`
+            : "") +
+          (report.status === "rejected"
+            ? `\n**Rejection Reason:** ${report.rejection_reason}`
+            : "") +
+          `\n**Reported By:** ${report.reporter}\n` +
+          `**Date:** ${report.issued_date.toDate().toLocaleString()}\n` +
+          `\u200B`;
+        reportsText += line;
+      }
+      embed.addFields({ name: "📢 Reports", value: reportsText });
+    }
+
+    // Check if there are any actions to announce
+    if (embed.data.fields?.length > 0) {
+      const channel = client.channels.cache.get(announcementChannelId);
+      if (!channel) {
+        console.error("Announcement channel not found!");
+        return interaction.followUp({
+          content: "❌ Announcement channel not found.",
+          ephemeral: true,
+        });
+      }
+      await channel.send({ embeds: [embed] });
+      await interaction.followUp({
+        content: "✅ Weekly moderation announcement posted.",
+        ephemeral: true,
+      });
     } else {
-      return interaction.reply({
-        content: `❌ No document found with Action ID: ${action_id}`,
+      console.log("No actions to announce this week.");
+      await interaction.followUp({
+        content: "❌ No moderation actions to announce for this week.",
         ephemeral: true,
       });
     }
-
-    interaction.reply({
-      content: `✅ Announcement for Action ID: ${action_id} has been posted.`,
-      flags: 64,
-    });
   } catch (error) {
-    console.error("Error announcing action:", error);
-    interaction.reply({
-      content: "❌ An error occurred while processing the announcement.",
-      ephemeral: true,
-    });
+    console.error("Error in announceWeekly:", error);
   }
 }
 
@@ -592,8 +930,8 @@ async function createEmbedForLog(log, type) {
           { name: "Roblox ID", value: String(log.roblox_id), inline: true },
           {
             name: "Tier",
-            value: `Tier ${log.tier} (${log.duration_months} ${
-              log.duration_months === 1 ? "month" : "months"
+            value: `Tier ${log.tier} (${log.duration} ${
+              log.duration === 1 ? "month" : "months"
             })`,
             inline: true,
           },
@@ -732,18 +1070,31 @@ client.on("interactionCreate", async (interaction) => {
         logsData = await getUserLogs(username);
       } else if (type === "group") {
         logsData = await getGroupLogs(group_id);
+      } else if (type === "appeal") {
+        if (!username) {
+          await interaction.reply(
+            "The username parameter is required for appeal logs."
+          );
+          return;
+        }
+        logsData = await getAppealLogs(username);
       }
 
       if (logsData.length === 0) {
         await interaction.followUp(
-          "No logs found for the specified user/group."
+          "No logs found for the specified user/group/appeal."
         );
         return;
       }
 
       const embeds = [];
       for (const log of logsData) {
-        const embed = await createEmbedForLog(log, type);
+        let embed;
+        if (log.action_type === "Appeal") {
+          embed = await createEmbedForAppealLog(log);
+        } else {
+          embed = await createEmbedForLog(log, type);
+        }
         embeds.push(embed);
       }
 
@@ -785,11 +1136,27 @@ client.on("interactionCreate", async (interaction) => {
 
     // Write to Firestore & update variable
     try {
-      await db
-        .collection("channels")
-        .doc("announcement_channel")
-        .set({ id: channel.id });
-      announcementChannelId = channel.id; // Update variable
+      if (type === "announcements") {
+        await db
+          .collection("channels")
+          .doc("announcement_channel")
+          .set({ id: channel.id });
+        announcementChannelId = channel.id;
+      } else if (type === "appeals") {
+        await db
+          .collection("channels")
+          .doc("appeal_channel")
+          .set({ id: channel.id });
+        appealChannelId = channel.id;
+      } else if (type === "reports") {
+        // Add this block
+        await db
+          .collection("channels")
+          .doc("reports_channel")
+          .set({ id: channel.id });
+        reportsChannelId = channel.id;
+      }
+
       await interaction.reply({
         content: `✅ The ${type} channel has been set to <#${channel.id}>.`,
         ephemeral: true,
@@ -804,7 +1171,7 @@ client.on("interactionCreate", async (interaction) => {
   }
 
   if (interaction.commandName === "announce") {
-    await announceAction(interaction);
+    await announceWeekly(interaction);
   }
 
   if (!interaction.isCommand()) return;
@@ -912,7 +1279,7 @@ client.on("interactionCreate", async (interaction) => {
         action_id: newActionId,
         roblox_id: robloxId,
         tier: tier,
-        duration_months: durationInMonths,
+        duration: durationInMonths,
         category,
         reason,
         issued_by: issuedBy,
@@ -1584,6 +1951,1010 @@ client.on("interactionCreate", async (interaction) => {
       });
     }
   }
+
+  // Add URL validation function at the top of the file
+  function isValidUrl(string) {
+    try {
+      new URL(string);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Update the appeal command handler
+  if (interaction.commandName === "appeal") {
+    const type = interaction.options.getString("type");
+    const username = interaction.options.getString("username");
+    const groupId = interaction.options.getString("group_id");
+    const reason = interaction.options.getString("reason");
+    const evidence = interaction.options.getString("evidence");
+
+    try {
+      await interaction.deferReply();
+
+      // Validate evidence URL
+      if (!isValidUrl(evidence)) {
+        const errorEmbed = new EmbedBuilder()
+          .setTitle("Error")
+          .setColor(0xff0000)
+          .setDescription("Please provide a valid URL for evidence.")
+          .setTimestamp()
+          .setFooter({
+            text: "DB | Justice Panel",
+            iconURL: client.user.avatarURL(),
+          });
+        return interaction.followUp({ embeds: [errorEmbed] });
+      }
+
+      // Validate input based on type
+      if (type === "user" && !username) {
+        return interaction.followUp(
+          "❌ Username is required for user appeals."
+        );
+      }
+      if (type === "group" && !groupId) {
+        return interaction.followUp(
+          "❌ Group ID is required for group appeals."
+        );
+      }
+
+      let robloxId, name, link;
+
+      // Get Roblox info based on type
+      if (type === "user") {
+        robloxId = await noblox.getIdFromUsername(username).catch(() => null);
+        if (!robloxId) {
+          return interaction.followUp(
+            "❌ The provided username does not exist on Roblox."
+          );
+        }
+        name = username;
+        link = `https://roblox.com/users/${robloxId}`;
+      } else {
+        try {
+          const groupInfo = await noblox.getGroup(groupId);
+          robloxId = groupId;
+          name = groupInfo.name;
+          link = `https://roblox.com/groups/${groupId}`;
+        } catch (error) {
+          return interaction.followUp(
+            "❌ The provided group ID does not exist on Roblox."
+          );
+        }
+      }
+
+      // Check for existing moderation actions
+      let hasModAction = false;
+      if (type === "user") {
+        // Check bans
+        const bansSnapshot = await db
+          .collection("bans")
+          .where("roblox_id", "==", robloxId)
+          .get();
+
+        // Check suspensions
+        const suspensionsSnapshot = await db
+          .collection("suspensions")
+          .where("roblox_id", "==", robloxId)
+          .where("end_date", ">", new Date()) // Only active suspensions
+          .get();
+
+        hasModAction = !bansSnapshot.empty || !suspensionsSnapshot.empty;
+      } else {
+        // Check blacklists for groups
+        const blacklistsSnapshot = await db
+          .collection("blacklists")
+          .where("roblox_id", "==", groupId)
+          .get();
+
+        hasModAction = !blacklistsSnapshot.empty;
+      }
+
+      if (!hasModAction) {
+        const errorEmbed = new EmbedBuilder()
+          .setTitle("Error")
+          .setColor(0xff0000)
+          .setDescription(
+            `This ${type} does not have any active moderation actions to appeal.`
+          )
+          .setTimestamp()
+          .setFooter({
+            text: "DB | Justice Panel",
+            iconURL: client.user.avatarURL(),
+          });
+        return interaction.followUp({ embeds: [errorEmbed] });
+      }
+
+      // Also check if they already have a pending appeal
+      const existingAppealSnapshot = await db
+        .collection("appeals")
+        .where("roblox_id", "==", type === "user" ? robloxId : groupId)
+        .where("status", "==", "pending")
+        .get();
+
+      if (!existingAppealSnapshot.empty) {
+        const errorEmbed = new EmbedBuilder()
+          .setTitle("Error")
+          .setColor(0xff0000)
+          .setDescription(`This ${type} already has a pending appeal.`)
+          .setTimestamp()
+          .setFooter({
+            text: "DB | Justice Panel",
+            iconURL: client.user.avatarURL(),
+          });
+        return interaction.followUp({ embeds: [errorEmbed] });
+      }
+
+      // Continue with the rest of the appeal creation if all validations pass
+
+      // Generate new appeal ID
+      const appealId = await db.runTransaction(async (transaction) => {
+        const appealsSnapshot = await transaction.get(db.collection("appeals"));
+        let maxNumber = 0;
+
+        appealsSnapshot.forEach((doc) => {
+          const match = doc.id.match(/^appeal-(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNumber) maxNumber = num;
+          }
+        });
+
+        return `appeal-${maxNumber + 1}`;
+      });
+
+      const appealData = {
+        action_id: appealId,
+        type: type,
+        roblox_id: robloxId,
+        reason: reason,
+        evidence: evidence,
+        issued_date: new Date(),
+        status: "pending",
+        discord_id: interaction.user.id, // Add this line
+      };
+
+      await db.collection("appeals").doc(appealId).set(appealData);
+
+      // Get user thumbnail for embed
+      const thumbnails = await noblox.getPlayerThumbnail(
+        [robloxId],
+        420,
+        "png",
+        true
+      );
+      const playerThumbnail =
+        thumbnails[0]?.imageUrl || "https://tr.rbxcdn.com/default-avatar.png";
+
+      // Create new response embed
+      const successEmbed = new EmbedBuilder()
+        .setTitle("Successfully submitted appeal request.")
+        .setColor(0x00ff00)
+        .setThumbnail(playerThumbnail) // Add thumbnail
+        .addFields(
+          {
+            name: "Appeal",
+            value: appealId,
+            inline: false,
+          },
+          {
+            name: "Status",
+            value: "Pending Approval",
+            inline: false,
+          },
+          {
+            name: "Target",
+            value: `[${name}](${link})`,
+            inline: false,
+          },
+          {
+            name: "Reason",
+            value: reason,
+            inline: false,
+          },
+          {
+            name: "Evidence",
+            value: `[Click Here](${evidence})`,
+            inline: false,
+          }
+        )
+        .setTimestamp()
+        .setFooter({
+          text: "DB | Justice Panel",
+          iconURL: client.user.avatarURL(),
+        });
+
+      // Send notification to mods channel
+      if (appealChannelId) {
+        const modChannel = client.channels.cache.get(appealChannelId);
+        if (modChannel) {
+          const modEmbed = new EmbedBuilder()
+            .setTitle("New Appeal Submitted")
+            .setColor(0x0099ff)
+            .setThumbnail(playerThumbnail) // Add thumbnail
+            .addFields(
+              {
+                name: "Appeal ID",
+                value: appealId,
+                inline: true,
+              },
+              {
+                name: "Type",
+                value: type.charAt(0).toUpperCase() + type.slice(1),
+                inline: true,
+              },
+              {
+                name: "Target",
+                value: `[${name}](${link})`,
+                inline: true,
+              },
+              {
+                name: "Reason",
+                value: reason,
+                inline: false,
+              },
+              {
+                name: "Evidence",
+                value: `[Click Here](${evidence})`,
+                inline: false,
+              },
+              {
+                name: "Submitted By",
+                value: interaction.user.tag,
+                inline: true,
+              },
+              {
+                name: "Submitted At",
+                value: new Date().toLocaleString(),
+                inline: true,
+              }
+            )
+            .setTimestamp()
+            .setFooter({
+              text: "DB | Justice Panel",
+              iconURL: client.user.avatarURL(),
+            });
+
+          await modChannel.send({ embeds: [modEmbed] });
+        }
+      }
+
+      await interaction.followUp({ embeds: [successEmbed] });
+    } catch (error) {
+      console.error("Error processing appeal command:", error);
+      await interaction.followUp(
+        "❌ There was an error processing the appeal."
+      );
+    }
+  }
+
+  if (interaction.commandName === "accept_appeal") {
+    const type = interaction.options.getString("type");
+    const username = interaction.options.getString("username");
+    const groupId = interaction.options.getString("group_id");
+
+    // Check for required roles
+    const modRoleId = "1335829172131594251";
+    const execRoleId = "1335829226003366009";
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+
+    if (
+      !member.roles.cache.has(modRoleId) &&
+      !member.roles.cache.has(execRoleId)
+    ) {
+      return interaction.reply({
+        content: "❌ You do not have permission to use this command.",
+        ephemeral: true,
+      });
+    }
+
+    try {
+      await interaction.deferReply();
+
+      // Get Roblox ID from username
+      const robloxId = await noblox
+        .getIdFromUsername(username)
+        .catch(() => null);
+      if (!robloxId) {
+        return interaction.followUp(
+          "❌ The provided username does not exist on Roblox."
+        );
+      }
+
+      // Get the pending appeal
+      const appealsSnapshot = await db
+        .collection("appeals")
+        .where("roblox_id", "==", robloxId)
+        .where("status", "==", "pending")
+        .get();
+
+      if (appealsSnapshot.empty) {
+        return interaction.followUp(
+          "❌ No pending appeal found for this user."
+        );
+      }
+
+      const appealDoc = appealsSnapshot.docs[0];
+      const appealData = appealDoc.data();
+
+      // Update the appeal status
+      await appealDoc.ref.update({
+        status: "accepted",
+        processed_by: interaction.user.username,
+        processed_date: new Date(),
+      });
+
+      // Get user thumbnail for embed
+      const thumbnails = await noblox.getPlayerThumbnail(
+        [robloxId],
+        420,
+        "png",
+        true
+      );
+      const avatarUrl =
+        thumbnails[0]?.imageUrl || "https://tr.rbxcdn.com/default-avatar.png";
+
+      const successEmbed = new EmbedBuilder()
+        .setTitle("Appeal Accepted")
+        .setColor(0x00ff00)
+        .setThumbnail(avatarUrl)
+        .addFields(
+          { name: "Action ID", value: appealData.action_id, inline: true },
+          { name: "Roblox Username", value: username, inline: true },
+          {
+            name: "Processed By",
+            value: interaction.user.username,
+            inline: true,
+          },
+          {
+            name: "Processed Date",
+            value: new Date().toLocaleString(),
+            inline: true,
+          }
+        )
+        .setTimestamp()
+        .setFooter({
+          text: `Appeal accepted by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
+        });
+
+      await interaction.followUp({ embeds: [successEmbed] });
+
+      // In the accept_appeal command, after updating the appeal status
+      // Get the appeal submitter's Discord ID
+      if (appealData.discord_id) {
+        try {
+          const user = await client.users.fetch(appealData.discord_id);
+          const dmEmbed = new EmbedBuilder()
+            .setTitle("Appeal Status Update")
+            .setColor(0x00ff00)
+            .setThumbnail(avatarUrl)
+            .addFields(
+              {
+                name: "Appeal",
+                value: appealData.action_id, // Changed from appealId
+                inline: false,
+              },
+              {
+                name: "Status",
+                value: "Accepted ✅",
+                inline: false,
+              },
+              {
+                name: "Target",
+                value: `[${username}](https://roblox.com/users/${robloxId})`, // Changed from name/link
+                inline: false,
+              }
+            )
+            .setTimestamp()
+            .setFooter({
+              text: "DB | Justice Panel",
+              iconURL: client.user.avatarURL(),
+            });
+
+          await user.send({ embeds: [dmEmbed] });
+        } catch (error) {
+          console.error("Failed to send DM to appeal submitter:", error);
+        }
+      }
+    } catch (error) {
+      console.error("Error processing accept_appeal command:", error);
+      await interaction.followUp(
+        "❌ There was an error processing the appeal acceptance."
+      );
+    }
+  }
+
+  if (interaction.commandName === "reject_appeal") {
+    const type = interaction.options.getString("type");
+    const username = interaction.options.getString("username");
+    const groupId = interaction.options.getString("group_id");
+    const reason = interaction.options.getString("reason");
+
+    // Check for required roles
+    const modRoleId = "1335829172131594251";
+    const execRoleId = "1335829226003366009";
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+
+    if (
+      !member.roles.cache.has(modRoleId) &&
+      !member.roles.cache.has(execRoleId)
+    ) {
+      return interaction.reply({
+        content: "❌ You do not have permission to use this command.",
+        ephemeral: true,
+      });
+    }
+
+    try {
+      await interaction.deferReply();
+
+      // Get Roblox ID from username
+      const robloxId = await noblox
+        .getIdFromUsername(username)
+        .catch(() => null);
+      if (!robloxId) {
+        return interaction.followUp(
+          "❌ The provided username does not exist on Roblox."
+        );
+      }
+
+      // Get the pending appeal
+      const appealsSnapshot = await db
+        .collection("appeals")
+        .where("roblox_id", "==", robloxId)
+        .where("status", "==", "pending")
+        .get();
+
+      if (appealsSnapshot.empty) {
+        return interaction.followUp(
+          "❌ No pending appeal found for this user."
+        );
+      }
+
+      const appealDoc = appealsSnapshot.docs[0];
+      const appealData = appealDoc.data();
+
+      // Update the appeal status
+      await appealDoc.ref.update({
+        status: "rejected",
+        rejection_reason: reason,
+        processed_by: interaction.user.username,
+        processed_date: new Date(),
+      });
+
+      // Get user thumbnail for embed
+      const thumbnails = await noblox.getPlayerThumbnail(
+        [robloxId],
+        420,
+        "png",
+        true
+      );
+      const avatarUrl =
+        thumbnails[0]?.imageUrl || "https://tr.rbxcdn.com/default-avatar.png";
+
+      const rejectEmbed = new EmbedBuilder()
+        .setTitle("Appeal Rejected")
+        .setColor(0xff0000)
+        .setThumbnail(avatarUrl)
+        .addFields(
+          { name: "Action ID", value: appealData.action_id, inline: true },
+          { name: "Roblox Username", value: username, inline: true },
+          {
+            name: "Processed By",
+            value: interaction.user.username,
+            inline: true,
+          },
+          { name: "Rejection Reason", value: reason, inline: false },
+          {
+            name: "Processed Date",
+            value: new Date().toLocaleString(),
+            inline: true,
+          }
+        )
+        .setTimestamp()
+        .setFooter({
+          text: `Appeal rejected by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
+        });
+
+      await interaction.followUp({ embeds: [rejectEmbed] });
+
+      // In the reject_appeal command, after updating the appeal status
+      // Get the appeal submitter's Discord ID
+      if (appealData.discord_id) {
+        try {
+          const user = await client.users.fetch(appealData.discord_id);
+          const dmEmbed = new EmbedBuilder()
+            .setTitle("Appeal Status Update")
+            .setColor(0xff0000)
+            .setThumbnail(avatarUrl)
+            .addFields(
+              {
+                name: "Appeal",
+                value: appealData.action_id, // Changed from appealId
+                inline: false,
+              },
+              {
+                name: "Status",
+                value: "Rejected ❌",
+                inline: false,
+              },
+              {
+                name: "Target",
+                value: `[${username}](https://roblox.com/users/${robloxId})`, // Changed from name/link
+                inline: false,
+              },
+              {
+                name: "Reason",
+                value: reason,
+                inline: false,
+              }
+            )
+            .setTimestamp()
+            .setFooter({
+              text: "DB | Justice Panel",
+              iconURL: client.user.avatarURL(),
+            });
+
+          await user.send({ embeds: [dmEmbed] });
+        } catch (error) {
+          console.error("Failed to send DM to appeal submitter:", error);
+        }
+      }
+    } catch (error) {
+      console.error("Error processing reject_appeal command:", error);
+      await interaction.followUp(
+        "❌ There was an error processing the appeal rejection."
+      );
+    }
+  }
+
+  if (interaction.commandName === "report") {
+    const type = interaction.options.getString("type");
+    const username = interaction.options.getString("username");
+    const groupId = interaction.options.getString("group_id");
+    const reason = interaction.options.getString("reason");
+    const evidence = interaction.options.getString("evidence");
+
+    try {
+      await interaction.deferReply({ ephemeral: true });
+
+      // Validate input based on type
+      if (type === "user" && !username) {
+        return interaction.followUp(
+          "❌ Username is required for user reports."
+        );
+      }
+      if (type === "group" && !groupId) {
+        return interaction.followUp(
+          "❌ Group ID is required for group reports."
+        );
+      }
+
+      let robloxId, name, thumbnailUrl;
+
+      // Get Roblox info based on type
+      if (type === "user") {
+        robloxId = await noblox.getIdFromUsername(username).catch(() => null);
+        if (!robloxId) {
+          return interaction.followUp(
+            "❌ The provided username does not exist on Roblox."
+          );
+        }
+        name = username;
+        const thumbnails = await noblox.getPlayerThumbnail(
+          [robloxId],
+          420,
+          "png",
+          true
+        );
+        thumbnailUrl =
+          thumbnails[0]?.imageUrl || "https://tr.rbxcdn.com/default-avatar.png";
+      } else {
+        try {
+          const groupInfo = await noblox.getGroup(groupId);
+          robloxId = groupId;
+          name = groupInfo.name;
+          thumbnailUrl = await fetchGroupIconUrl(groupId);
+        } catch (error) {
+          return interaction.followUp(
+            "❌ The provided group ID does not exist on Roblox."
+          );
+        }
+      }
+
+      // Generate new report ID
+      const reportId = await db.runTransaction(async (transaction) => {
+        const reportsSnapshot = await transaction.get(db.collection("reports"));
+        let maxNumber = 0;
+
+        reportsSnapshot.forEach((doc) => {
+          const match = doc.id.match(/^report-(\d+)$/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (num > maxNumber) maxNumber = num;
+          }
+        });
+
+        return `report-${maxNumber + 1}`;
+      });
+
+      // Create report data - only declare once
+      const reportData = {
+        action_id: reportId,
+        type: type,
+        roblox_id: robloxId,
+        reason: reason,
+        evidence: evidence,
+        reporter: interaction.user.tag,
+        issued_date: new Date(),
+        status: "pending",
+        discord_id: interaction.user.id,
+      };
+
+      // Save to Firestore
+      await db.collection("reports").doc(reportId).set(reportData);
+
+      // Create success embed
+      const successEmbed = new EmbedBuilder()
+        .setTitle("Report Submitted")
+        .setColor(0x00ff00)
+        .setThumbnail(thumbnailUrl)
+        .addFields(
+          { name: "Report ID", value: reportId, inline: true },
+          {
+            name: type === "user" ? "Username" : "Group Name",
+            value: name,
+            inline: true,
+          },
+          {
+            name: type === "user" ? "User ID" : "Group ID",
+            value: String(robloxId),
+            inline: true,
+          },
+          { name: "Reason", value: reason, inline: false },
+          { name: "Evidence", value: evidence, inline: false },
+          { name: "Status", value: "Pending", inline: true },
+          { name: "Submitted By", value: interaction.user.tag, inline: true }
+        )
+        .setTimestamp()
+        .setFooter({
+          text: `Report submitted by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
+        });
+
+      await interaction.followUp({
+        content:
+          "✅ Your report has been submitted successfully. A moderator will review it shortly.",
+        embeds: [successEmbed],
+        ephemeral: true,
+      });
+
+      // Add reports channel notification
+      if (reportsChannelId) {
+        const reportsChannel = client.channels.cache.get(reportsChannelId);
+        if (reportsChannel) {
+          const modEmbed = new EmbedBuilder()
+            .setTitle("New Report Submitted")
+            .setColor(0x0099ff)
+            .setThumbnail(thumbnailUrl)
+            .addFields(
+              { name: "Report ID", value: reportId, inline: true },
+              {
+                name: "Type",
+                value: type.charAt(0).toUpperCase() + type.slice(1),
+                inline: true,
+              },
+              {
+                name: type === "user" ? "Username" : "Group Name",
+                value: name,
+                inline: true,
+              },
+              { name: "Reason", value: reason, inline: false },
+              { name: "Evidence", value: evidence, inline: false },
+              {
+                name: "Submitted By",
+                value: interaction.user.tag,
+                inline: true,
+              },
+              {
+                name: "Submitted At",
+                value: new Date().toLocaleString(),
+                inline: true,
+              }
+            )
+            .setTimestamp()
+            .setFooter({
+              text: "DB | Justice Panel",
+              iconURL: client.user.avatarURL(),
+            });
+
+          await reportsChannel.send({ embeds: [modEmbed] });
+        }
+      }
+    } catch (error) {
+      console.error("Error processing report command:", error);
+      await interaction.followUp({
+        content:
+          "❌ There was an error processing your report. Please try again later.",
+        ephemeral: true,
+      });
+    }
+  }
+
+  if (interaction.commandName === "accept_report") {
+    const reportId = interaction.options.getString("report_id");
+    const action = interaction.options.getString("action");
+    const reason = interaction.options.getString("reason");
+
+    // Check for required roles
+    const modRoleId = "1335829172131594251";
+    const execRoleId = "1335829226003366009";
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+
+    if (
+      !member.roles.cache.has(modRoleId) &&
+      !member.roles.cache.has(execRoleId)
+    ) {
+      return interaction.reply({
+        content: "❌ You do not have permission to use this command.",
+        ephemeral: true,
+      });
+    }
+
+    try {
+      await interaction.deferReply();
+
+      // Get the report
+      const reportDoc = await db.collection("reports").doc(reportId).get();
+      if (!reportDoc.exists) {
+        return interaction.followUp("❌ Report not found.");
+      }
+
+      const reportData = reportDoc.data();
+      if (reportData.status !== "pending") {
+        return interaction.followUp(
+          "❌ This report has already been processed."
+        );
+      }
+
+      // Get name and thumbnail
+      let name, thumbnailUrl;
+      if (reportData.type === "user") {
+        name = await noblox.getUsernameFromId(reportData.roblox_id);
+        const thumbnails = await noblox.getPlayerThumbnail(
+          [reportData.roblox_id],
+          420,
+          "png",
+          true
+        );
+        thumbnailUrl =
+          thumbnails[0]?.imageUrl || "https://tr.rbxcdn.com/default-avatar.png";
+      } else {
+        const groupInfo = await noblox.getGroup(reportData.roblox_id);
+        name = groupInfo.name;
+        thumbnailUrl = await fetchGroupIconUrl(reportData.roblox_id);
+      }
+
+      // Update report status
+      await reportDoc.ref.update({
+        status: "accepted",
+        action_taken: action,
+        processed_by: interaction.user.username,
+        processed_date: new Date(),
+        action_reason: reason,
+      });
+
+      const successEmbed = new EmbedBuilder()
+        .setTitle("Report Accepted")
+        .setColor(0x00ff00)
+        .setThumbnail(thumbnailUrl)
+        .addFields(
+          { name: "Report ID", value: reportId, inline: true },
+          {
+            name: reportData.type === "user" ? "Username" : "Group Name",
+            value: name,
+            inline: true,
+          },
+          { name: "Action Taken", value: action, inline: true },
+          {
+            name: "Original Report Reason",
+            value: reportData.reason,
+            inline: false,
+          },
+          { name: "Action Reason", value: reason, inline: false },
+          {
+            name: "Original Evidence",
+            value: reportData.evidence,
+            inline: false,
+          },
+          {
+            name: "Processed By",
+            value: interaction.user.username,
+            inline: true,
+          },
+          {
+            name: "Processed Date",
+            value: new Date().toLocaleString(),
+            inline: true,
+          }
+        )
+        .setTimestamp()
+        .setFooter({
+          text: `Report processed by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
+        });
+
+      await interaction.followUp({ embeds: [successEmbed] });
+
+      // In the accept_report command handler, after updating report status:
+      if (reportData.discord_id) {
+        try {
+          const user = await client.users.fetch(reportData.discord_id);
+          const dmEmbed = new EmbedBuilder()
+            .setTitle("Report Status Update")
+            .setColor(0x00ff00)
+            .setThumbnail(thumbnailUrl)
+            .addFields(
+              { name: "Report ID", value: reportId, inline: true },
+              { name: "Status", value: "Accepted ✅", inline: true },
+              { name: "Action Taken", value: action, inline: true },
+              { name: "Action Reason", value: reason, inline: false }
+            )
+            .setTimestamp()
+            .setFooter({
+              text: "DB | Justice Panel",
+              iconURL: client.user.avatarURL(),
+            });
+
+          await user.send({ embeds: [dmEmbed] });
+        } catch (error) {
+          console.error("Failed to send DM to report submitter:", error);
+        }
+      }
+    } catch (error) {
+      console.error("Error processing accept_report command:", error);
+      await interaction.followUp(
+        "❌ There was an error processing the report acceptance."
+      );
+    }
+  }
+
+  if (interaction.commandName === "reject_report") {
+    const reportId = interaction.options.getString("report_id");
+    const reason = interaction.options.getString("reason");
+
+    // Check for required roles
+    const modRoleId = "1335829172131594251";
+    const execRoleId = "1335829226003366009";
+    const member = await interaction.guild.members.fetch(interaction.user.id);
+
+    if (
+      !member.roles.cache.has(modRoleId) &&
+      !member.roles.cache.has(execRoleId)
+    ) {
+      return interaction.reply({
+        content: "❌ You do not have permission to use this command.",
+        ephemeral: true,
+      });
+    }
+
+    try {
+      await interaction.deferReply();
+
+      // Get the report
+      const reportDoc = await db.collection("reports").doc(reportId).get();
+      if (!reportDoc.exists) {
+        return interaction.followUp("❌ Report not found.");
+      }
+
+      const reportData = reportDoc.data();
+      if (reportData.status !== "pending") {
+        return interaction.followUp(
+          "❌ This report has already been processed."
+        );
+      }
+
+      // Get name and thumbnail
+      let name, thumbnailUrl;
+      if (reportData.type === "user") {
+        name = await noblox.getUsernameFromId(reportData.roblox_id);
+        const thumbnails = await noblox.getPlayerThumbnail(
+          [reportData.roblox_id],
+          420,
+          "png",
+          true
+        );
+        thumbnailUrl =
+          thumbnails[0]?.imageUrl || "https://tr.rbxcdn.com/default-avatar.png";
+      } else {
+        const groupInfo = await noblox.getGroup(reportData.roblox_id);
+        name = groupInfo.name;
+        thumbnailUrl = await fetchGroupIconUrl(reportData.roblox_id);
+      }
+
+      // Update report status
+      await reportDoc.ref.update({
+        status: "rejected",
+        rejection_reason: reason,
+        processed_by: interaction.user.username,
+        processed_date: new Date(),
+      });
+
+      const rejectEmbed = new EmbedBuilder()
+        .setTitle("Report Rejected")
+        .setColor(0xff0000)
+        .setThumbnail(thumbnailUrl)
+        .addFields(
+          { name: "Report ID", value: reportId, inline: true },
+          {
+            name: reportData.type === "user" ? "Username" : "Group Name",
+            value: name,
+            inline: true,
+          },
+          {
+            name: "Original Report Reason",
+            value: reportData.reason,
+            inline: false,
+          },
+          {
+            name: "Original Evidence",
+            value: reportData.evidence,
+            inline: false,
+          },
+          { name: "Rejection Reason", value: reason, inline: false },
+          {
+            name: "Processed By",
+            value: interaction.user.username,
+            inline: true,
+          },
+          {
+            name: "Processed Date",
+            value: new Date().toLocaleString(),
+            inline: true,
+          }
+        )
+        .setTimestamp()
+        .setFooter({
+          text: `Report rejected by ${interaction.user.username}`,
+          iconURL: interaction.user.avatarURL(),
+        });
+
+      await interaction.followUp({ embeds: [rejectEmbed] });
+
+      // In the reject_report command handler, after updating report status:
+      if (reportData.discord_id) {
+        try {
+          const user = await client.users.fetch(reportData.discord_id);
+          const dmEmbed = new EmbedBuilder()
+            .setTitle("Report Status Update")
+            .setColor(0xff0000)
+            .setThumbnail(thumbnailUrl)
+            .addFields(
+              { name: "Report ID", value: reportId, inline: true },
+              { name: "Status", value: "Rejected ❌", inline: true },
+              { name: "Rejection Reason", value: reason, inline: false }
+            )
+            .setTimestamp()
+            .setFooter({
+              text: "DB | Justice Panel",
+              iconURL: client.user.avatarURL(),
+            });
+
+          await user.send({ embeds: [dmEmbed] });
+        } catch (error) {
+          console.error("Failed to send DM to report submitter:", error);
+        }
+      }
+    } catch (error) {
+      console.error("Error processing reject_report command:", error);
+      await interaction.followUp(
+        "❌ There was an error processing the report rejection."
+      );
+    }
+  }
 });
 
 client
@@ -1591,8 +2962,100 @@ client
   .then(() => {
     console.log("Bot successfully logged into Discord!");
     startNoblox();
-    fetchAnnouncementChannel();
+    fetchChannels(); // Updated to fetch both channels
   })
   .catch((error) => {
     console.error("Error logging into Discord:", error);
   });
+
+// Add new function to fetch appeal logs
+async function getAppealLogs(username) {
+  const id = await noblox.getIdFromUsername(username);
+  if (!id) {
+    console.error("Could not find Roblox ID for username:", username);
+    return [];
+  }
+
+  const logsData = [];
+  try {
+    const appealsSnapshot = await db
+      .collection("appeals")
+      .where("roblox_id", "==", id)
+      .get();
+    appealsSnapshot.forEach((doc) => {
+      const appealData = doc.data();
+      logsData.push({
+        ...appealData,
+        action_type: "Appeal",
+        action_id: appealData.action_id,
+        issued_date: appealData.issued_date,
+        status: appealData.status,
+      });
+    });
+
+    logsData.sort((a, b) => b.issued_date.toDate() - a.issued_date.toDate());
+    return logsData;
+  } catch (error) {
+    console.error("Error fetching appeal logs:", error);
+    return [];
+  }
+}
+
+// Add new function to create embed for appeal logs
+async function createEmbedForAppealLog(log) {
+  const robloxData = await getRobloxData(log.roblox_id, "user");
+
+  const fields = [
+    { name: "Action ID", value: log.action_id, inline: true },
+    { name: "Roblox Username", value: robloxData.username, inline: true },
+    { name: "Roblox ID", value: String(log.roblox_id), inline: true },
+    {
+      name: "Status",
+      value: log.status.charAt(0).toUpperCase() + log.status.slice(1),
+      inline: true,
+    },
+    {
+      name: "Issued Date",
+      value: log.issued_date.toDate().toLocaleString(),
+      inline: true,
+    },
+  ];
+
+  // Add processed information if appeal was handled
+  if (log.status !== "pending") {
+    fields.push(
+      { name: "Processed By", value: log.processed_by, inline: true },
+      {
+        name: "Processed Date",
+        value: log.processed_date.toDate().toLocaleString(),
+        inline: true,
+      }
+    );
+
+    // Add rejection reason if appeal was rejected
+    if (log.status === "rejected" && log.rejection_reason) {
+      fields.push({
+        name: "Rejection Reason",
+        value: log.rejection_reason,
+        inline: false,
+      });
+    }
+  }
+
+  const embed = new EmbedBuilder()
+    .setColor(
+      log.status === "accepted"
+        ? 0x00ff00
+        : log.status === "rejected"
+        ? 0xff0000
+        : 0x0099ff
+    )
+    .setTitle("Appeal Information")
+    .setThumbnail(robloxData.thumbnail)
+    .addFields(fields)
+    .setFooter({
+      text: "Brought to you by DB | Justice Panel",
+    });
+
+  return embed;
+}
