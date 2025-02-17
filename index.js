@@ -1047,16 +1047,6 @@ async function createAuditLog(action, targetName, targetId, description) {
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
 
-  // Log the command usage at the start
-  await createAuditLog(
-    "+command",
-    interaction.user.tag,
-    interaction.user.id,
-    `Used /${interaction.commandName} command with options: ${JSON.stringify(
-      interaction.options.data
-    )}`
-  );
-
   if (interaction.commandName === "logs") {
     const { type, username, group_id } = interaction.options.data.reduce(
       (acc, option) => {
@@ -1363,17 +1353,12 @@ client.on("interactionCreate", async (interaction) => {
       await interaction.followUp({ embeds: [successEmbed] });
 
       // After successfully suspending:
-      await createAuditLog(AUDIT_TYPES.MODERATION_ACTION, {
-        action: "suspend",
-        targetId: robloxId,
-        targetUsername: username,
-        moderator: interaction.user.tag,
-        moderatorId: interaction.user.id,
-        reason,
-        duration: durationInMonths,
-        tier,
-        evidence: evidence || "No evidence provided",
-      });
+      await createAuditLog(
+        "+",
+        username,
+        robloxId,
+        `${username} was suspended for ${durationInMonths} months (Tier ${tier}) | Reason: ${reason}`
+      );
     } catch (error) {
       console.error("Error processing suspend command:", error);
       await interaction.followUp(
@@ -1447,10 +1432,10 @@ client.on("interactionCreate", async (interaction) => {
 
       // In the unsuspend command, after removing suspension:
       await createAuditLog(
-        "-unsuspend",
+        "-",
         username,
         userId,
-        `${username}'s suspension was manually removed by ${interaction.user.tag}`
+        `${username}'s suspension was manually removed`
       );
     } catch (error) {
       console.error("Error in /unsuspend command:", error);
@@ -1577,10 +1562,10 @@ client.on("interactionCreate", async (interaction) => {
 
       // In the ban command, after banning the user:
       await createAuditLog(
-        "+ban",
+        "+",
         username,
         robloxId,
-        `${username} was permanently banned by ${interaction.user.tag} | Reason: ${reason}`
+        `${username} was permanently banned | Reason: ${reason}`
       );
     } catch (error) {
       console.error("Error processing ban command:", error);
@@ -1641,10 +1626,10 @@ client.on("interactionCreate", async (interaction) => {
 
       // In the unban command, after unbanning the user:
       await createAuditLog(
-        "-unban",
+        "-",
         username,
         userId,
-        `${username}'s ban was removed by ${interaction.user.tag}`
+        `${username}'s ban was removed`
       );
     } catch (error) {
       console.error("Error in /unban command:", error);
@@ -1787,10 +1772,10 @@ client.on("interactionCreate", async (interaction) => {
 
       // In the blacklist command, after blacklisting the group:
       await createAuditLog(
-        "+blacklist",
+        "+",
         groupInfo.name,
         group_id,
-        `Group "${groupInfo.name}" was blacklisted by ${interaction.user.tag} | Reason: ${reason}`
+        `Group "${groupInfo.name}" was blacklisted | Reason: ${reason}`
       );
     } catch (error) {
       console.error("Error processing blacklist command:", error);
@@ -1857,10 +1842,10 @@ client.on("interactionCreate", async (interaction) => {
 
       // In the unblacklist command, after unblacklisting the group:
       await createAuditLog(
-        "-unblacklist",
+        "-",
         groupInfo.name,
         group_id,
-        `Group "${groupInfo.name}" was removed from blacklist by ${interaction.user.tag}`
+        `Group "${groupInfo.name}" was removed from blacklist`
       );
     } catch (error) {
       console.error("Error in /unblacklist command:", error);
@@ -2310,7 +2295,12 @@ client.on("interactionCreate", async (interaction) => {
       await interaction.followUp({ embeds: [successEmbed] });
 
       // In the appeal command, after submitting the appeal:
-      await createAuditLog("+appeal", username, robloxId, reason);
+      await createAuditLog(
+        "+",
+        username,
+        robloxId,
+        `${username} submitted an appeal | Reason: ${reason}`
+      );
     } catch (error) {
       console.error("Error processing appeal command:", error);
       await interaction.followUp(
@@ -2451,10 +2441,12 @@ client.on("interactionCreate", async (interaction) => {
 
       // In the accept_appeal command, after updating the appeal status:
       await createAuditLog(
-        "-appeal",
+        "-",
         username,
         robloxId,
-        `${username}'s appeal was accepted by ${interaction.user.tag}`
+        `${username}'s appeal was ${accepted ? "accepted" : "rejected"}${
+          reason ? ` | Reason: ${reason}` : ""
+        }`
       );
     } catch (error) {
       console.error("Error processing accept_appeal command:", error);
@@ -2604,10 +2596,12 @@ client.on("interactionCreate", async (interaction) => {
 
       // In the reject_appeal command, after updating the appeal status:
       await createAuditLog(
-        "-appeal",
+        "-",
         username,
         robloxId,
-        `${username}'s appeal was rejected by ${interaction.user.tag} | Reason: ${reason}`
+        `${username}'s appeal was ${accepted ? "accepted" : "rejected"}${
+          reason ? ` | Reason: ${reason}` : ""
+        }`
       );
     } catch (error) {
       console.error("Error processing reject_appeal command:", error);
@@ -2783,12 +2777,12 @@ client.on("interactionCreate", async (interaction) => {
 
       // In the report command, after submitting the report:
       await createAuditLog(
-        "+report",
+        "+",
         name,
         robloxId,
-        `${type === "user" ? username : `Group "${name}"`} was reported by ${
-          interaction.user.tag
-        } | Reason: ${reason}`
+        `${
+          type === "user" ? username : `Group "${name}"`
+        } was reported | Reason: ${reason}`
       );
     } catch (error) {
       console.error("Error processing report command:", error);
@@ -2933,14 +2927,14 @@ client.on("interactionCreate", async (interaction) => {
 
       // In the accept_report command handler, after updating report status:
       await createAuditLog(
-        "-report",
+        "-",
         name,
         robloxId,
-        `Report against ${
-          type === "user" ? username : `Group "${name}"`
-        } was accepted by ${
-          interaction.user.tag
-        } | Action: ${action} | Reason: ${reason}`
+        `Report against ${type === "user" ? username : `Group "${name}"`} was ${
+          accepted ? "accepted" : "rejected"
+        } by ${interaction.user.tag}${action ? ` | Action: ${action}` : ""}${
+          reason ? ` | Reason: ${reason}` : ""
+        }`
       );
     } catch (error) {
       console.error("Error processing accept_report command:", error);
@@ -3079,7 +3073,7 @@ client.on("interactionCreate", async (interaction) => {
 
       // In the reject_report command handler, after updating report status:
       await createAuditLog(
-        "-report",
+        "-",
         name,
         robloxId,
         `Report against ${
@@ -3111,7 +3105,7 @@ async function checkExpiredSuspensions() {
 
       // Create audit log for expired suspension
       await createAuditLog(
-        "-expire",
+        "-",
         username,
         suspensionData.roblox_id,
         `${username}'s Tier ${suspensionData.tier} suspension has expired`
