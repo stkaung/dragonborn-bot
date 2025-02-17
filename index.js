@@ -1019,9 +1019,43 @@ async function getRobloxData(robloxId, type) {
   }
 }
 
-// Handle interaction events
+// Add this near the top with other global variables
+const AUDIT_TYPES = {
+  COMMAND_USED: "command_used",
+  SUSPENSION_EXPIRED: "suspension_expired",
+  MODERATION_ACTION: "moderation_action",
+};
+
+// Update the createAuditLog function
+async function createAuditLog(action, targetName, targetId, description) {
+  try {
+    const logData = {
+      action: action, // e.g. "+ban", "-unban", "+suspend", "-appeal"
+      name: targetName, // Roblox username or group name
+      roblox_id: targetId, // Roblox user ID or group ID
+      date: new Date(), // Timestamp
+      description: description, // Description of what happened
+    };
+
+    await db.collection("logs").add(logData);
+  } catch (error) {
+    console.error("Error creating audit log:", error);
+  }
+}
+
+// Update the interaction handler to log commands
 client.on("interactionCreate", async (interaction) => {
   if (!interaction.isCommand()) return;
+
+  // Log the command usage at the start
+  await createAuditLog(
+    "+command",
+    interaction.user.tag,
+    interaction.user.id,
+    `Used /${interaction.commandName} command with options: ${JSON.stringify(
+      interaction.options.data
+    )}`
+  );
 
   if (interaction.commandName === "logs") {
     const { type, username, group_id } = interaction.options.data.reduce(
@@ -1327,6 +1361,19 @@ client.on("interactionCreate", async (interaction) => {
         });
 
       await interaction.followUp({ embeds: [successEmbed] });
+
+      // After successfully suspending:
+      await createAuditLog(AUDIT_TYPES.MODERATION_ACTION, {
+        action: "suspend",
+        targetId: robloxId,
+        targetUsername: username,
+        moderator: interaction.user.tag,
+        moderatorId: interaction.user.id,
+        reason,
+        duration: durationInMonths,
+        tier,
+        evidence: evidence || "No evidence provided",
+      });
     } catch (error) {
       console.error("Error processing suspend command:", error);
       await interaction.followUp(
@@ -1397,6 +1444,14 @@ client.on("interactionCreate", async (interaction) => {
         });
 
       await interaction.reply({ embeds: [successEmbed] });
+
+      // In the unsuspend command, after removing suspension:
+      await createAuditLog(
+        "-unsuspend",
+        username,
+        userId,
+        `${username}'s suspension was manually removed by ${interaction.user.tag}`
+      );
     } catch (error) {
       console.error("Error in /unsuspend command:", error);
 
@@ -1519,6 +1574,14 @@ client.on("interactionCreate", async (interaction) => {
         });
 
       await interaction.followUp({ embeds: [successEmbed] });
+
+      // In the ban command, after banning the user:
+      await createAuditLog(
+        "+ban",
+        username,
+        robloxId,
+        `${username} was permanently banned by ${interaction.user.tag} | Reason: ${reason}`
+      );
     } catch (error) {
       console.error("Error processing ban command:", error);
       await interaction.followUp("❌ There was an error processing the ban.");
@@ -1575,6 +1638,14 @@ client.on("interactionCreate", async (interaction) => {
         });
 
       await interaction.reply({ embeds: [successEmbed] });
+
+      // In the unban command, after unbanning the user:
+      await createAuditLog(
+        "-unban",
+        username,
+        userId,
+        `${username}'s ban was removed by ${interaction.user.tag}`
+      );
     } catch (error) {
       console.error("Error in /unban command:", error);
       await interaction.reply({
@@ -1713,6 +1784,14 @@ client.on("interactionCreate", async (interaction) => {
         });
 
       await interaction.followUp({ embeds: [successEmbed] });
+
+      // In the blacklist command, after blacklisting the group:
+      await createAuditLog(
+        "+blacklist",
+        groupInfo.name,
+        group_id,
+        `Group "${groupInfo.name}" was blacklisted by ${interaction.user.tag} | Reason: ${reason}`
+      );
     } catch (error) {
       console.error("Error processing blacklist command:", error);
       await interaction.followUp(
@@ -1775,6 +1854,14 @@ client.on("interactionCreate", async (interaction) => {
         });
 
       await interaction.followUp({ embeds: [successEmbed] });
+
+      // In the unblacklist command, after unblacklisting the group:
+      await createAuditLog(
+        "-unblacklist",
+        groupInfo.name,
+        group_id,
+        `Group "${groupInfo.name}" was removed from blacklist by ${interaction.user.tag}`
+      );
     } catch (error) {
       console.error("Error in /unblacklist command:", error);
       await interaction.reply({
@@ -2221,6 +2308,9 @@ client.on("interactionCreate", async (interaction) => {
       }
 
       await interaction.followUp({ embeds: [successEmbed] });
+
+      // In the appeal command, after submitting the appeal:
+      await createAuditLog("+appeal", username, robloxId, reason);
     } catch (error) {
       console.error("Error processing appeal command:", error);
       await interaction.followUp(
@@ -2358,6 +2448,14 @@ client.on("interactionCreate", async (interaction) => {
           console.error("Failed to send DM to appeal submitter:", error);
         }
       }
+
+      // In the accept_appeal command, after updating the appeal status:
+      await createAuditLog(
+        "-appeal",
+        username,
+        robloxId,
+        `${username}'s appeal was accepted by ${interaction.user.tag}`
+      );
     } catch (error) {
       console.error("Error processing accept_appeal command:", error);
       await interaction.followUp(
@@ -2503,6 +2601,14 @@ client.on("interactionCreate", async (interaction) => {
           console.error("Failed to send DM to appeal submitter:", error);
         }
       }
+
+      // In the reject_appeal command, after updating the appeal status:
+      await createAuditLog(
+        "-appeal",
+        username,
+        robloxId,
+        `${username}'s appeal was rejected by ${interaction.user.tag} | Reason: ${reason}`
+      );
     } catch (error) {
       console.error("Error processing reject_appeal command:", error);
       await interaction.followUp(
@@ -2674,6 +2780,16 @@ client.on("interactionCreate", async (interaction) => {
           await reportsChannel.send({ embeds: [modEmbed] });
         }
       }
+
+      // In the report command, after submitting the report:
+      await createAuditLog(
+        "+report",
+        name,
+        robloxId,
+        `${type === "user" ? username : `Group "${name}"`} was reported by ${
+          interaction.user.tag
+        } | Reason: ${reason}`
+      );
     } catch (error) {
       console.error("Error processing report command:", error);
       await interaction.followUp({
@@ -2814,6 +2930,18 @@ client.on("interactionCreate", async (interaction) => {
           console.error("Failed to send DM to report submitter:", error);
         }
       }
+
+      // In the accept_report command handler, after updating report status:
+      await createAuditLog(
+        "-report",
+        name,
+        robloxId,
+        `Report against ${
+          type === "user" ? username : `Group "${name}"`
+        } was accepted by ${
+          interaction.user.tag
+        } | Action: ${action} | Reason: ${reason}`
+      );
     } catch (error) {
       console.error("Error processing accept_report command:", error);
       await interaction.followUp(
@@ -2948,6 +3076,16 @@ client.on("interactionCreate", async (interaction) => {
           console.error("Failed to send DM to report submitter:", error);
         }
       }
+
+      // In the reject_report command handler, after updating report status:
+      await createAuditLog(
+        "-report",
+        name,
+        robloxId,
+        `Report against ${
+          type === "user" ? username : `Group "${name}"`
+        } was rejected by ${interaction.user.tag} | Reason: ${reason}`
+      );
     } catch (error) {
       console.error("Error processing reject_report command:", error);
       await interaction.followUp(
@@ -2957,12 +3095,45 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
+// Add suspension expiry checker
+async function checkExpiredSuspensions() {
+  try {
+    const now = new Date();
+    const suspensionsRef = db.collection("suspensions");
+    const expiredSuspensions = await suspensionsRef
+      .where("end_date", "<=", now)
+      .where("logged", "!=", true)
+      .get();
+
+    for (const doc of expiredSuspensions.docs) {
+      const suspensionData = doc.data();
+      const username = await noblox.getUsernameFromId(suspensionData.roblox_id);
+
+      // Create audit log for expired suspension
+      await createAuditLog(
+        "-expire",
+        username,
+        suspensionData.roblox_id,
+        `${username}'s Tier ${suspensionData.tier} suspension has expired`
+      );
+
+      // Mark as logged
+      await doc.ref.update({ logged: true });
+    }
+  } catch (error) {
+    console.error("Error checking expired suspensions:", error);
+  }
+}
+
 client
   .login(process.env.DISCORD_TOKEN)
   .then(() => {
     console.log("Bot successfully logged into Discord!");
     startNoblox();
-    fetchChannels(); // Updated to fetch both channels
+    fetchChannels();
+
+    // Check for expired suspensions every hour
+    setInterval(checkExpiredSuspensions, 60 * 60 * 1000);
   })
   .catch((error) => {
     console.error("Error logging into Discord:", error);
